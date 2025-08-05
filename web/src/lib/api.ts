@@ -1,6 +1,7 @@
 import type { AuthResponse, Instance, TorrentResponse, MainData, User } from '@/types'
+import { getApiBaseUrl } from './base-url'
 
-const API_BASE = '/api'
+const API_BASE = getApiBaseUrl()
 
 class ApiClient {
   private async request<T>(

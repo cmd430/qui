@@ -128,6 +128,7 @@ When handling 10k+ torrents:
 Environment variables use `qui__` prefix:
 - `qui__HOST` (default: localhost or 0.0.0.0 in containers)
 - `qui__PORT` (default: 8080)
+- `qui__BASE_URL` (serve app under subdirectory, e.g., "/qui/")
 - `qui__SESSION_SECRET` (auto-generated if not set)
 - `qui__LOG_LEVEL` (ERROR, DEBUG, INFO, WARN, TRACE)
 
@@ -230,6 +231,29 @@ pnpm dlx shadcn@latest add <component-name>
 - `web/src/components/torrents/TorrentTableOptimized.tsx` - Virtual scrolling implementation with torrent details
 - `web/src/components/torrents/TorrentDetailsPanel.tsx` - Torrent details panel with tabs
 - `internal/api/handlers/torrents.go` - Backend filtering and pagination logic
+
+## Base URL Configuration
+
+When serving the application from a subdirectory (e.g., `/qui/`), set the `baseUrl` in config:
+
+```toml
+baseUrl = "/qui/"
+```
+
+This configuration:
+- Mounts all routes under the specified path
+- Injects the base URL into the frontend at runtime (no rebuild needed)
+- Updates API endpoints and router navigation automatically
+- Redirects root path `/` to the base URL
+
+Example nginx proxy configuration:
+```nginx
+location /qui/ {
+    proxy_pass http://localhost:8080/qui/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
 
 ## Known Issues and Workarounds
 - SyncMainData implementation exists but is currently unused due to complexity

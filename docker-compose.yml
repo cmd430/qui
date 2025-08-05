@@ -18,6 +18,11 @@ services:
       # Default: 8080
       #QUI__PORT: "8080"
       
+      # Base URL for serving from subdirectory
+      # Example: /qui/ to serve at http://domain.com/qui/
+      # Not needed for subdomain or direct port access
+      #QUI__BASE_URL: "/qui/"
+      
       # Session secret for cookie encryption
       # Auto-generated if not provided
       # Recommended: Set a secure value for production

@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -153,10 +155,32 @@ func runServer() {
 	// Initialize router
 	router := api.NewRouter(deps)
 
+	// If baseURL is configured, mount the entire app under that path
+	var handler http.Handler
+	if cfg.Config.BaseURL != "" && cfg.Config.BaseURL != "/" {
+		// Create a parent router and mount our app under the base URL
+		parentRouter := chi.NewRouter()
+		
+		// Strip trailing slash from base URL for mounting
+		mountPath := strings.TrimSuffix(cfg.Config.BaseURL, "/")
+		
+		// Mount the application under the base URL
+		parentRouter.Mount(mountPath, router)
+		
+		// Redirect root to base URL
+		parentRouter.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, cfg.Config.BaseURL, http.StatusMovedPermanently)
+		})
+		
+		handler = parentRouter
+	} else {
+		handler = router
+	}
+
 	// Create HTTP server
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Config.Host, cfg.Config.Port),
-		Handler:      router,
+		Handler:      handler,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
