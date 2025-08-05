@@ -1138,73 +1138,79 @@ This ensures immediate UI feedback while guaranteeing data consistency.
 
 #### 2. Frontend Optimizations
 
-##### Data Fetching Strategy
+##### Server-Side Pagination Strategy
 ```tsx
-// src/hooks/useTorrentsSync.ts
-export function useTorrentsSync(instanceId: string) {
-  const [mainData, setMainData] = useState<MainData | null>(null)
-  const ridRef = useRef(0)
+// src/hooks/useTorrentsList.ts
+export function useTorrentsList(instanceId: string, options = {}) {
+  const [torrents, setTorrents] = useState<Torrent[]>([])
+  const [currentPage, setCurrentPage] = useState(0)
+  const pageSize = 500 // Load 500 torrents per page
   
-  // Initial paginated load
-  const { data: initialData } = useQuery({
-    queryKey: ['torrents', instanceId, 'initial'],
-    queryFn: () => api.getTorrentsInitial(instanceId, { limit: 100, offset: 0 }),
-    staleTime: Infinity, // Never refetch initial data
+  // Fetch page from server with filtering/sorting
+  const { data, isLoading } = useQuery({
+    queryKey: ['torrents-list', instanceId, currentPage, options.filters],
+    queryFn: () => api.getTorrents(instanceId, { 
+      page: currentPage, 
+      limit: pageSize,
+      sort: options.sort || 'addedOn',
+      order: options.order || 'desc',
+      filters: options.filters, // Server handles filtering
+    }),
+    staleTime: 2000, // Match backend cache TTL
+    refetchInterval: 5000, // Poll for updates
   })
   
-  // Real-time sync updates
+  // Append new pages to existing data
   useEffect(() => {
-    if (!initialData) return
-    
-    const syncInterval = setInterval(async () => {
-      const updates = await api.syncMainData(instanceId, ridRef.current)
-      
-      if (updates.fullUpdate) {
-        setMainData(updates)
+    if (data?.torrents) {
+      if (currentPage === 0) {
+        setTorrents(data.torrents)
       } else {
-        setMainData(prev => ({
-          ...prev,
-          ...updates,
-          torrents: { ...prev?.torrents, ...updates.torrents },
-          torrentsRemoved: updates.torrentsRemoved,
-        }))
+        setTorrents(prev => [...prev, ...data.torrents])
       }
-      
-      ridRef.current = updates.rid
-    }, 2000) // Poll every 2 seconds
-    
-    return () => clearInterval(syncInterval)
-  }, [instanceId, initialData])
+    }
+  }, [data, currentPage])
   
-  return { torrents: mainData?.torrents || initialData?.torrents || [], mainData }
+  const loadMore = () => {
+    if (torrents.length < data?.total) {
+      setCurrentPage(prev => prev + 1)
+    }
+  }
+  
+  return { 
+    torrents, 
+    totalCount: data?.total || 0,
+    isLoading,
+    loadMore,
+    hasMore: torrents.length < (data?.total || 0)
+  }
 }
 ```
 
-##### Virtual Scrolling with Progressive Loading
+##### Virtual Scrolling for DOM Efficiency
 ```tsx
-// Progressive loading for initial render
+// Virtual scrolling handles DOM rendering efficiency
 export function TorrentTable({ instanceId }: { instanceId: string }) {
-  const [loadedRows, setLoadedRows] = useState(100)
-  const { torrents, mainData } = useTorrentsSync(instanceId)
+  // Use server-side paginated data
+  const { torrents, loadMore, hasMore } = useTorrentsList(instanceId, {
+    pageSize: 500, // Load in chunks from server
+  })
   
-  // Load more rows as user scrolls
-  const loadMore = useCallback(() => {
-    setLoadedRows(prev => Math.min(prev + 100, torrents.length))
-  }, [torrents.length])
-  
-  // Virtual scrolling setup
+  // Virtual scrolling only renders visible rows in DOM
   const virtualizer = useVirtualizer({
-    count: Math.min(loadedRows, torrents.length),
+    count: torrents.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 45,
-    overscan: 20, // Increased for smoother scrolling
-    onChange: (instance) => {
-      const lastItem = instance.getVirtualItems().at(-1)
-      if (lastItem && lastItem.index >= loadedRows - 50) {
-        loadMore()
-      }
-    },
+    overscan: 10, // Render a few extra rows for smooth scrolling
   })
+  
+  // Load more from server when approaching end
+  useEffect(() => {
+    const lastItem = virtualizer.getVirtualItems().at(-1)
+    if (lastItem && lastItem.index >= torrents.length - 50 && hasMore) {
+      loadMore() // Fetch next page from server
+    }
+  }, [virtualizer.getVirtualItems(), torrents.length, hasMore, loadMore])
 }
 ```
 
@@ -1249,9 +1255,9 @@ The go-qbittorrent library provides excellent support for handling large-scale d
    - Use AbortController for proper cleanup
 
 3. **Memory Management**:
-   - Store minimal torrent data in frontend state
-   - Lazy-load detailed properties on demand
-   - Clear unused data from memory
+   - Server-side pagination prevents loading all torrents into memory
+   - Backend handles filtering/sorting to reduce data transfer
+   - Virtual scrolling (TanStack Virtual) ensures only visible rows are rendered in DOM
 
 #### Monitoring & Metrics
 - Track API response times
