@@ -28,4 +28,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-hook-form'],
+          'tanstack': ['@tanstack/react-router', '@tanstack/react-query', '@tanstack/react-table', '@tanstack/react-virtual'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', 'lucide-react'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 750,
+  },
 })
