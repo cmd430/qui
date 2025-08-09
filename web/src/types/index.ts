@@ -5,6 +5,17 @@ export interface User {
   updatedAt: string
 }
 
+export interface CustomTheme {
+  id: number
+  name: string
+  description?: string
+  baseThemeId: string
+  cssVarsLight: Record<string, string>
+  cssVarsDark: Record<string, string>
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AuthResponse {
   user: User
   message?: string

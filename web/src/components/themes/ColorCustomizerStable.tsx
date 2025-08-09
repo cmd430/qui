@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useMemo, useRef } from 'react'
-import { Palette, Save, RotateCcw, X, Sparkles, Copy, Check, ChevronDown } from 'lucide-react'
+import { Palette, Save, RotateCcw, X, Sparkles, Copy, Check, ChevronDown, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Popover,
@@ -27,6 +27,7 @@ import { getThemeById } from '@/config/themes'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { ThemeCreator } from './ThemeCreator'
 
 // Parse OKLCH
 function parseOklch(str: string): { l: number; c: number; h: number } {
@@ -115,6 +116,7 @@ export function ColorCustomizer() {
   const [activeCategory, setActiveCategory] = useState<ColorCategory>('ui')
   const [activeColor, setActiveColor] = useState<ColorKey>('primary')
   const [copiedValue, setCopiedValue] = useState<string | null>(null)
+  const [showThemeCreator, setShowThemeCreator] = useState(false)
   
   // Determine current mode (light or dark)
   const isDarkMode = document.documentElement.classList.contains('dark')
@@ -302,13 +304,38 @@ export function ColorCustomizer() {
     setTimeout(() => setCopiedValue(null), 2000)
   }, [])
   
+  // Collect all current colors (including customizations)
+  const collectCurrentColors = useCallback(() => {
+    const colors: Record<string, string> = {}
+    const root = document.documentElement
+    
+    // Get all color variables we track
+    const allColors = [
+      ...COLOR_CATEGORIES.base.colors,
+      ...COLOR_CATEGORIES.ui.colors,
+      ...COLOR_CATEGORIES.semantic.colors,
+      ...COLOR_CATEGORIES.chart.colors,
+      ...COLOR_CATEGORIES.sidebar.colors
+    ]
+    
+    allColors.forEach(color => {
+      const value = getComputedStyle(root).getPropertyValue(`--${color}`).trim()
+      if (value) {
+        colors[`--${color}`] = value
+      }
+    })
+    
+    return colors
+  }, [])
+  
   if (!isLicenseLoading && !hasPremiumAccess) {
     return null
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
         <Button 
           variant="ghost" 
           size="icon"
@@ -532,16 +559,41 @@ export function ColorCustomizer() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button
-            size="sm"
-            onClick={handleSave}
-            disabled={!hasChanges || isUpdating}
-          >
-            <Save className="h-4 w-4 mr-2" />
-            Save
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowThemeCreator(true)}
+              title="Save current colors as a new theme"
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Save as Theme
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={!hasChanges || isUpdating}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save
+            </Button>
+          </div>
         </div>
-      </PopoverContent>
-    </Popover>
+        </PopoverContent>
+      </Popover>
+      
+      {/* Pass collected colors to ThemeCreator when it's shown */}
+      {showThemeCreator && (
+        <ThemeCreator
+          open={showThemeCreator}
+          onOpenChange={setShowThemeCreator}
+          baseThemeId={currentThemeId}
+          initialColors={{
+            light: currentMode === 'light' ? collectCurrentColors() : {},
+            dark: currentMode === 'dark' ? collectCurrentColors() : {}
+          }}
+        />
+      )}
+    </>
   )
 }

@@ -147,6 +147,13 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 
 			// Theme customizations (premium feature)
 			r.Mount("/theme-customizations", themeCustomizationsHandler.Routes())
+			
+			// Custom themes (premium feature)
+			customThemesHandler := handlers.NewCustomThemesHandler(deps.DB)
+			if deps.ThemeLicenseService != nil {
+				customThemesHandler.SetThemeLicenseService(deps.ThemeLicenseService)
+			}
+			r.Mount("/custom-themes", customThemesHandler.Routes())
 		})
 	})
 

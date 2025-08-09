@@ -1,4 +1,4 @@
-import type { AuthResponse, Instance, TorrentResponse, MainData, User } from '@/types'
+import type { AuthResponse, Instance, TorrentResponse, MainData, User, CustomTheme } from '@/types'
 import { getApiBaseUrl } from './base-url'
 
 const API_BASE = getApiBaseUrl()
@@ -402,6 +402,80 @@ class ApiClient {
 
   async resetThemeCustomizations(): Promise<void> {
     await this.request('/theme-customizations', { method: 'DELETE' })
+  }
+
+  // Custom themes
+  async getCustomThemes(): Promise<CustomTheme[]> {
+    return this.request('/custom-themes')
+  }
+
+  async getCustomTheme(id: number): Promise<CustomTheme> {
+    return this.request(`/custom-themes/${id}`)
+  }
+
+  async createCustomTheme(theme: {
+    name: string
+    description?: string
+    baseThemeId: string
+    cssVarsLight: Record<string, string>
+    cssVarsDark: Record<string, string>
+  }): Promise<CustomTheme> {
+    return this.request('/custom-themes', {
+      method: 'POST',
+      body: JSON.stringify(theme),
+    })
+  }
+
+  async updateCustomTheme(
+    id: number,
+    theme: {
+      name: string
+      description?: string
+      cssVarsLight: Record<string, string>
+      cssVarsDark: Record<string, string>
+    }
+  ): Promise<void> {
+    await this.request(`/custom-themes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(theme),
+    })
+  }
+
+  async deleteCustomTheme(id: number): Promise<void> {
+    await this.request(`/custom-themes/${id}`, { method: 'DELETE' })
+  }
+
+  async duplicateCustomTheme(id: number): Promise<CustomTheme> {
+    return this.request(`/custom-themes/${id}/duplicate`, { method: 'POST' })
+  }
+
+  async importCustomTheme(theme: {
+    name: string
+    description?: string
+    baseThemeId?: string
+    cssVarsLight: Record<string, string>
+    cssVarsDark: Record<string, string>
+  }): Promise<CustomTheme> {
+    return this.request('/custom-themes/import', {
+      method: 'POST',
+      body: JSON.stringify(theme),
+    })
+  }
+
+  async exportCustomTheme(id: number): Promise<Blob> {
+    const response = await fetch(`${API_BASE}/custom-themes/${id}/export`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error('Failed to export theme')
+    }
+    
+    return response.blob()
   }
 }
 
