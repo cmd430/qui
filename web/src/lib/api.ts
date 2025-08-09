@@ -378,6 +378,31 @@ class ApiClient {
   async refreshThemeLicenses(): Promise<{ message: string }> {
     return this.request('/themes/license/refresh', { method: 'POST' })
   }
+
+  // Theme customizations
+  // Structure: theme_id -> mode (light/dark) -> color_var -> value
+  async getThemeCustomizations(): Promise<{
+    colorOverrides: Record<string, Record<string, Record<string, string>>>
+    updatedAt?: string
+  }> {
+    return this.request('/theme-customizations')
+  }
+
+  async updateThemeCustomizations(
+    colorOverrides: Record<string, Record<string, Record<string, string>>>
+  ): Promise<{
+    colorOverrides: Record<string, Record<string, Record<string, string>>>
+    updatedAt?: string
+  }> {
+    return this.request('/theme-customizations', {
+      method: 'PUT',
+      body: JSON.stringify({ colorOverrides }),
+    })
+  }
+
+  async resetThemeCustomizations(): Promise<void> {
+    await this.request('/theme-customizations', { method: 'DELETE' })
+  }
 }
 
 export const api = new ApiClient()

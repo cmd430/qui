@@ -1,9 +1,8 @@
 import { RouterProvider } from '@tanstack/react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { router } from './router'
-import { useEffect } from 'react'
-import { initializeTheme } from '@/utils/theme'
-import { initializePWANativeTheme } from '@/utils/pwaNativeTheme'
+import { ThemeProvider } from '@/components/themes/ThemeProvider'
+import { ThemeCustomizationProvider } from '@/components/themes/ThemeCustomizationProvider'
 import { Toaster } from '@/components/ui/sonner'
 import { InstallPrompt } from '@/components/pwa/InstallPrompt'
 import { IOSInstallPrompt } from '@/components/pwa/IOSInstallPrompt'
@@ -18,17 +17,16 @@ const queryClient = new QueryClient({
 })
 
 function App() {
-  useEffect(() => {
-    initializeTheme().catch(console.error)
-    initializePWANativeTheme()
-  }, [])
-  
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster />
-      <InstallPrompt />
-      <IOSInstallPrompt />
+      <ThemeProvider>
+        <ThemeCustomizationProvider>
+          <RouterProvider router={router} />
+          <Toaster />
+          <InstallPrompt />
+          <IOSInstallPrompt />
+        </ThemeCustomizationProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }

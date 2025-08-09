@@ -54,11 +54,14 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 	authHandler := handlers.NewAuthHandler(deps.AuthService)
 	instancesHandler := handlers.NewInstancesHandler(deps.InstanceStore, deps.ClientPool, deps.SyncManager)
 	torrentsHandler := handlers.NewTorrentsHandler(deps.SyncManager)
+	themeCustomizationsHandler := handlers.NewThemeCustomizationsHandler(deps.DB)
 
 	// Theme license handler (optional, only if service is configured)
 	var themeLicenseHandler *handlers.ThemeLicenseHandler
 	if deps.ThemeLicenseService != nil {
 		themeLicenseHandler = handlers.NewThemeLicenseHandler(deps.ThemeLicenseService)
+		// Set the license service on customizations handler for premium check
+		themeCustomizationsHandler.SetThemeLicenseService(deps.ThemeLicenseService)
 	}
 
 	// API routes
@@ -141,6 +144,9 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 			if themeLicenseHandler != nil {
 				themeLicenseHandler.RegisterRoutes(r)
 			}
+
+			// Theme customizations (premium feature)
+			r.Mount("/theme-customizations", themeCustomizationsHandler.Routes())
 		})
 	})
 

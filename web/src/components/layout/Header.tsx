@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { User, LogOut, Key } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { ColorCustomizer } from '@/components/themes/ColorCustomizerStable'
 import { cn } from '@/lib/utils'
 import { Link } from '@tanstack/react-router'
 
@@ -34,6 +35,7 @@ export function Header({ children, sidebarCollapsed = false }: HeaderProps) {
       
       <div className="flex items-center gap-3">
         <ThemeToggle />
+        <ColorCustomizer />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="gap-2">
