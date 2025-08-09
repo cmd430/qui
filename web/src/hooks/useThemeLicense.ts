@@ -21,7 +21,7 @@ export const useValidateThemeLicense = () => {
     mutationFn: (licenseKey: string) => api.validateThemeLicense(licenseKey),
     onSuccess: (data) => {
       if (data.valid) {
-        const message = data.themeName === 'premium-access' 
+        const message = data.productName === 'premium-access' 
           ? 'Premium access activated! All premium themes are now unlocked.'
           : `License activated successfully!`
         toast.success(message)
