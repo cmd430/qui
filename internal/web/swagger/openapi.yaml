@@ -998,6 +998,226 @@ paths:
                   failed:
                     type: integer
 
+  /api/theme-customizations:
+    get:
+      tags:
+        - Theme Customization
+      summary: Get theme customizations
+      description: Get current color customizations for themes
+      responses:
+        '200':
+          description: Theme customizations retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  colorOverrides:
+                    type: object
+    put:
+      tags:
+        - Theme Customization
+      summary: Update theme customizations
+      description: Update color customizations for themes (Premium feature)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                colorOverrides:
+                  type: object
+      responses:
+        '200':
+          description: Customizations updated
+        '403':
+          description: Premium access required
+    delete:
+      tags:
+        - Theme Customization
+      summary: Delete theme customizations
+      description: Remove all theme customizations
+      responses:
+        '204':
+          description: Customizations deleted
+        '403':
+          description: Premium access required
+
+  /api/custom-themes:
+    get:
+      tags:
+        - Custom Themes
+      summary: List custom themes
+      description: Get all user-created custom themes
+      responses:
+        '200':
+          description: List of custom themes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CustomTheme'
+        '403':
+          description: Premium access required
+    post:
+      tags:
+        - Custom Themes
+      summary: Create custom theme
+      description: Create a new custom theme (Premium feature)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomThemeCreate'
+      responses:
+        '201':
+          description: Theme created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomTheme'
+        '403':
+          description: Premium access required
+
+  /api/custom-themes/import:
+    post:
+      tags:
+        - Custom Themes
+      summary: Import custom theme
+      description: Import a theme from CSS format
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomThemeImport'
+      responses:
+        '201':
+          description: Theme imported
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomTheme'
+        '403':
+          description: Premium access required
+
+  /api/custom-themes/{id}:
+    get:
+      tags:
+        - Custom Themes
+      summary: Get custom theme
+      description: Get a specific custom theme by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Custom theme details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomTheme'
+        '404':
+          description: Theme not found
+    put:
+      tags:
+        - Custom Themes
+      summary: Update custom theme
+      description: Update an existing custom theme
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomThemeUpdate'
+      responses:
+        '200':
+          description: Theme updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomTheme'
+        '403':
+          description: Premium access required
+        '404':
+          description: Theme not found
+    delete:
+      tags:
+        - Custom Themes
+      summary: Delete custom theme
+      description: Delete a custom theme
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Theme deleted
+        '403':
+          description: Premium access required
+        '404':
+          description: Theme not found
+
+  /api/custom-themes/{id}/duplicate:
+    post:
+      tags:
+        - Custom Themes
+      summary: Duplicate custom theme
+      description: Create a copy of an existing custom theme
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '201':
+          description: Theme duplicated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomTheme'
+        '403':
+          description: Premium access required
+        '404':
+          description: Original theme not found
+
+  /api/custom-themes/{id}/export:
+    get:
+      tags:
+        - Custom Themes
+      summary: Export custom theme
+      description: Export a custom theme in CSS format
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Theme exported
+          content:
+            text/css:
+              schema:
+                type: string
+        '404':
+          description: Theme not found
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -1216,6 +1436,80 @@ components:
         savePath:
           type: string
 
+    CustomTheme:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        baseThemeId:
+          type: string
+        cssVarsLight:
+          type: object
+          description: CSS variables for light mode
+        cssVarsDark:
+          type: object
+          description: CSS variables for dark mode
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CustomThemeCreate:
+      type: object
+      required:
+        - name
+        - baseThemeId
+        - cssVarsLight
+        - cssVarsDark
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        baseThemeId:
+          type: string
+        cssVarsLight:
+          type: object
+        cssVarsDark:
+          type: object
+
+    CustomThemeUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        cssVarsLight:
+          type: object
+        cssVarsDark:
+          type: object
+
+    CustomThemeImport:
+      type: object
+      required:
+        - name
+        - cssVarsLight
+        - cssVarsDark
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        baseThemeId:
+          type: string
+          default: minimal
+        cssVarsLight:
+          type: object
+        cssVarsDark:
+          type: object
+
 tags:
   - name: Authentication
     description: User authentication and session management
@@ -1233,3 +1527,7 @@ tags:
     description: Tag management
   - name: Theme Licenses
     description: Theme license management (optional feature)
+  - name: Theme Customization
+    description: Theme color customization (premium feature)
+  - name: Custom Themes
+    description: User-created custom themes (premium feature)
