@@ -1,4 +1,5 @@
--- Add theme licenses table for Polar SDK integration
+-- Add premium licenses table for Polar SDK integration
+-- Licenses unlock premium themes, color customization, custom themes, and import/export features
 CREATE TABLE theme_licenses (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     license_key TEXT UNIQUE NOT NULL,

@@ -51,16 +51,37 @@ export function ThemeCreator({
         throw new Error('Theme name is required')
       }
       
+      // Helper to ensure fonts are present
+      const ensureFonts = (cssVars: Record<string, string>) => {
+        const result = { ...cssVars }
+        const minimalFonts = {
+          '--font-sans': "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+          '--font-serif': 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+          '--font-mono': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+        }
+        
+        // Add fonts only if missing
+        if (!result['--font-sans']) result['--font-sans'] = minimalFonts['--font-sans']
+        if (!result['--font-serif']) result['--font-serif'] = minimalFonts['--font-serif']
+        if (!result['--font-mono']) result['--font-mono'] = minimalFonts['--font-mono']
+        
+        return result
+      }
+      
       // Merge initial colors with base theme colors to ensure completeness
-      const lightColors = {
+      let lightColors = {
         ...baseTheme!.cssVars.light,
         ...(initialColors?.light || {})
       }
       
-      const darkColors = {
+      let darkColors = {
         ...baseTheme!.cssVars.dark,
         ...(initialColors?.dark || {})
       }
+      
+      // Ensure fonts are present (uses provided fonts or falls back to minimal)
+      lightColors = ensureFonts(lightColors)
+      darkColors = ensureFonts(darkColors)
       
       return api.createCustomTheme({
         name: name.trim(),

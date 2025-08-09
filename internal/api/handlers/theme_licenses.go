@@ -10,12 +10,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ThemeLicenseHandler handles theme license related HTTP requests
+// ThemeLicenseHandler handles premium license related HTTP requests
+// Licenses unlock premium themes, color customization, custom themes, and import/export features
 type ThemeLicenseHandler struct {
 	themeLicenseService *services.ThemeLicenseService
 }
 
-// NewThemeLicenseHandler creates a new theme license handler
+// NewThemeLicenseHandler creates a new premium license handler
 func NewThemeLicenseHandler(themeLicenseService *services.ThemeLicenseService) *ThemeLicenseHandler {
 	return &ThemeLicenseHandler{
 		themeLicenseService: themeLicenseService,
@@ -29,11 +30,11 @@ type ValidateLicenseRequest struct {
 
 // ValidateLicenseResponse represents the response for license validation
 type ValidateLicenseResponse struct {
-	Valid     bool       `json:"valid"`
-	ThemeName string     `json:"themeName,omitempty"`
-	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
-	Message   string     `json:"message,omitempty"`
-	Error     string     `json:"error,omitempty"`
+	Valid       bool       `json:"valid"`
+	ProductName string     `json:"productName,omitempty"`
+	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	Message     string     `json:"message,omitempty"`
+	Error       string     `json:"error,omitempty"`
 }
 
 // PremiumAccessResponse represents the response for premium access status
@@ -43,10 +44,10 @@ type PremiumAccessResponse struct {
 
 // LicenseInfo represents basic license information for UI display
 type LicenseInfo struct {
-	LicenseKey string    `json:"licenseKey"`
-	ThemeName  string    `json:"themeName"`
-	Status     string    `json:"status"`
-	CreatedAt  time.Time `json:"createdAt"`
+	LicenseKey  string    `json:"licenseKey"`
+	ProductName string    `json:"productName"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // RegisterRoutes registers theme license routes
@@ -60,7 +61,7 @@ func (h *ThemeLicenseHandler) RegisterRoutes(r chi.Router) {
 	})
 }
 
-// ValidateLicense validates and activates a theme license
+// ValidateLicense validates and activates a premium license for themes and customization features
 func (h *ThemeLicenseHandler) ValidateLicense(w http.ResponseWriter, r *http.Request) {
 	var req ValidateLicenseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -96,19 +97,19 @@ func (h *ThemeLicenseHandler) ValidateLicense(w http.ResponseWriter, r *http.Req
 	}
 
 	log.Info().
-		Str("themeName", license.ThemeName).
+		Str("productName", license.ProductName).
 		Str("licenseKey", maskLicenseKey(req.LicenseKey)).
 		Msg("License validated successfully")
 
 	RespondJSON(w, http.StatusOK, ValidateLicenseResponse{
-		Valid:     true,
-		ThemeName: license.ThemeName,
-		ExpiresAt: license.ExpiresAt,
-		Message:   "License validated and activated successfully",
+		Valid:       true,
+		ProductName: license.ProductName,
+		ExpiresAt:   license.ExpiresAt,
+		Message:     "License validated and activated successfully",
 	})
 }
 
-// GetLicensedThemes returns premium access status
+// GetLicensedThemes returns premium access status for themes and customization features
 func (h *ThemeLicenseHandler) GetLicensedThemes(w http.ResponseWriter, r *http.Request) {
 	hasPremium, err := h.themeLicenseService.HasPremiumAccess(r.Context())
 	if err != nil {
@@ -139,10 +140,10 @@ func (h *ThemeLicenseHandler) GetAllLicenses(w http.ResponseWriter, r *http.Requ
 	var licenseInfos []LicenseInfo
 	for _, license := range licenses {
 		licenseInfos = append(licenseInfos, LicenseInfo{
-			LicenseKey: license.LicenseKey,
-			ThemeName:  license.ThemeName,
-			Status:     license.Status,
-			CreatedAt:  license.CreatedAt,
+			LicenseKey:  license.LicenseKey,
+			ProductName: license.ProductName,
+			Status:      license.Status,
+			CreatedAt:   license.CreatedAt,
 		})
 	}
 

@@ -351,7 +351,7 @@ class ApiClient {
   // Theme License endpoints
   async validateThemeLicense(licenseKey: string): Promise<{
     valid: boolean
-    themeName?: string
+    productName?: string
     expiresAt?: string
     message?: string
     error?: string
@@ -368,7 +368,7 @@ class ApiClient {
 
   async getAllLicenses(): Promise<Array<{
     licenseKey: string
-    themeName: string
+    productName: string
     status: string
     createdAt: string
   }>> {

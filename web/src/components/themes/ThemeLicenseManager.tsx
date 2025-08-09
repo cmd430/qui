@@ -89,7 +89,7 @@ export function ThemeLicenseManager() {
               License Management
             </CardTitle>
             <CardDescription className="text-xs sm:text-sm mt-1">
-              Manage your theme licenses and premium access
+              Manage your licenses for premium themes and customization features
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -122,7 +122,7 @@ export function ThemeLicenseManager() {
             <div>
               <h4 className="font-medium mb-2 text-sm sm:text-base">Add New License</h4>
               <p className="text-xs sm:text-sm text-muted-foreground mb-3 sm:mb-4">
-                Enter your premium theme license key to unlock additional themes.
+                Enter your premium license key to unlock themes, color customization, and import/export features.
               </p>
             </div>
             
@@ -202,7 +202,7 @@ export function ThemeLicenseManager() {
                           {license.licenseKey}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {license.themeName} • Added {new Date(license.createdAt).toLocaleDateString()}
+                          Premium Access • Added {new Date(license.createdAt).toLocaleDateString()}
                         </div>
                       </div>
                       <Button
@@ -228,12 +228,12 @@ export function ThemeLicenseManager() {
             <Sparkles className={hasPremiumAccess ? "h-4 w-4 sm:h-5 sm:w-5 text-primary flex-shrink-0" : "h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0"} />
             <div className="min-w-0">
               <p className="font-medium text-sm sm:text-base">
-                {hasPremiumAccess ? "Premium Access Active" : "Unlock Premium Themes"}
+                {hasPremiumAccess ? "Premium Access Active" : "Unlock Premium Features"}
               </p>
               <p className="text-xs sm:text-sm text-muted-foreground">
                 {hasPremiumAccess 
-                  ? "You have access to all current and future premium themes" 
-                  : "One-time purchase • $9.99 • All themes"}
+                  ? "You have access to all premium themes, color customization, custom themes, and import/export" 
+                  : "One-time purchase • $9.99 • All themes + customization features"}
               </p>
             </div>
           </div>

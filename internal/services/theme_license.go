@@ -13,13 +13,13 @@ import (
 	"github.com/autobrr/qui/internal/polar"
 )
 
-// ThemeLicenseService handles theme license operations
+// ThemeLicenseService handles premium license operations for themes and customization features
 type ThemeLicenseService struct {
 	db          *database.DB
 	polarClient *polar.Client
 }
 
-// NewThemeLicenseService creates a new theme license service
+// NewThemeLicenseService creates a new premium license service
 func NewThemeLicenseService(db *database.DB, polarClient *polar.Client) *ThemeLicenseService {
 	return &ThemeLicenseService{
 		db:          db,
@@ -57,7 +57,7 @@ func (s *ThemeLicenseService) ValidateAndStoreLicense(ctx context.Context, licen
 	// Create license record
 	license := &models.ThemeLicense{
 		LicenseKey:      licenseKey,
-		ThemeName:       licenseInfo.ThemeName,
+		ProductName:     licenseInfo.ThemeName, // This comes from Polar as "premium-access"
 		Status:          models.LicenseStatusActive,
 		ActivatedAt:     time.Now(),
 		ExpiresAt:       licenseInfo.ExpiresAt,
@@ -74,7 +74,7 @@ func (s *ThemeLicenseService) ValidateAndStoreLicense(ctx context.Context, licen
 	}
 
 	log.Info().
-		Str("themeName", license.ThemeName).
+		Str("productName", license.ProductName).
 		Str("licenseKey", maskLicenseKey(licenseKey)).
 		Msg("License validated and stored successfully")
 
@@ -84,7 +84,7 @@ func (s *ThemeLicenseService) ValidateAndStoreLicense(ctx context.Context, licen
 // GetLicenseByKey retrieves a license by its key
 func (s *ThemeLicenseService) GetLicenseByKey(ctx context.Context, licenseKey string) (*models.ThemeLicense, error) {
 	query := `
-		SELECT id, license_key, theme_name, status, activated_at, expires_at, 
+		SELECT id, license_key, product_name, status, activated_at, expires_at, 
 		       last_validated, polar_customer_id, polar_product_id, created_at, updated_at
 		FROM theme_licenses 
 		WHERE license_key = ?
@@ -94,7 +94,7 @@ func (s *ThemeLicenseService) GetLicenseByKey(ctx context.Context, licenseKey st
 	err := s.db.Conn().QueryRowContext(ctx, query, licenseKey).Scan(
 		&license.ID,
 		&license.LicenseKey,
-		&license.ThemeName,
+		&license.ProductName,
 		&license.Status,
 		&license.ActivatedAt,
 		&license.ExpiresAt,
@@ -118,7 +118,7 @@ func (s *ThemeLicenseService) GetLicenseByKey(ctx context.Context, licenseKey st
 // GetAllLicenses retrieves all theme licenses
 func (s *ThemeLicenseService) GetAllLicenses(ctx context.Context) ([]*models.ThemeLicense, error) {
 	query := `
-		SELECT id, license_key, theme_name, status, activated_at, expires_at, 
+		SELECT id, license_key, product_name, status, activated_at, expires_at, 
 		       last_validated, polar_customer_id, polar_product_id, created_at, updated_at
 		FROM theme_licenses 
 		ORDER BY created_at DESC
@@ -136,7 +136,7 @@ func (s *ThemeLicenseService) GetAllLicenses(ctx context.Context) ([]*models.The
 		err := rows.Scan(
 			&license.ID,
 			&license.LicenseKey,
-			&license.ThemeName,
+			&license.ProductName,
 			&license.Status,
 			&license.ActivatedAt,
 			&license.ExpiresAt,
@@ -165,7 +165,7 @@ func (s *ThemeLicenseService) hasPremiumAccess(ctx context.Context) (bool, error
 	query := `
 		SELECT COUNT(*) 
 		FROM theme_licenses 
-		WHERE theme_name = 'premium-access' 
+		WHERE product_name = 'premium-access' 
 		AND status = ? 
 		AND (expires_at IS NULL OR expires_at > datetime('now'))
 	`
@@ -255,14 +255,14 @@ func (s *ThemeLicenseService) DeleteLicense(ctx context.Context, licenseKey stri
 
 func (s *ThemeLicenseService) storeLicense(ctx context.Context, license *models.ThemeLicense) error {
 	query := `
-		INSERT INTO theme_licenses (license_key, theme_name, status, activated_at, expires_at, 
+		INSERT INTO theme_licenses (license_key, product_name, status, activated_at, expires_at, 
 		                           last_validated, polar_customer_id, polar_product_id, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := s.db.Conn().ExecContext(ctx, query,
 		license.LicenseKey,
-		license.ThemeName,
+		license.ProductName,
 		license.Status,
 		license.ActivatedAt,
 		license.ExpiresAt,

@@ -5,11 +5,12 @@ import (
 	"time"
 )
 
-// ThemeLicense represents a theme license key in the database
+// ThemeLicense represents a premium license key in the database
+// Licenses unlock premium themes, color customization, custom themes, and import/export features
 type ThemeLicense struct {
 	ID              int        `json:"id" db:"id"`
 	LicenseKey      string     `json:"licenseKey" db:"license_key"`
-	ThemeName       string     `json:"themeName" db:"theme_name"`
+	ProductName     string     `json:"productName" db:"product_name"`
 	Status          string     `json:"status" db:"status"`
 	ActivatedAt     time.Time  `json:"activatedAt" db:"activated_at"`
 	ExpiresAt       *time.Time `json:"expiresAt,omitempty" db:"expires_at"`

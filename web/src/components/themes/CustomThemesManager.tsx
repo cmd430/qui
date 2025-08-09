@@ -8,6 +8,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { refreshThemesList } from '@/config/themes'
+import { setTheme } from '@/utils/theme'
+import { useTheme } from '@/hooks/useTheme'
 import type { CustomTheme } from '@/types'
 import { 
   Sparkles, 
@@ -17,7 +19,6 @@ import {
   Trash2, 
   Edit2,
   MoreVertical,
-  FileJson,
   Check
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -69,42 +70,36 @@ interface ExportDialogProps {
 interface ImportDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onImport: (json: string) => void
+  onImport: (themeData: any) => void
 }
 
-// Helper to add syntax highlighting to JSON
-function highlightJson(json: string): React.ReactNode {
-  // Simple regex-based JSON syntax highlighting
-  const highlighted = json
-    .replace(/("[\w-]+")(:)/g, '<span class="text-blue-600 dark:text-blue-400">$1</span>$2')  // Keys
-    .replace(/(:\s*"[^"]*")/g, '<span class="text-green-600 dark:text-green-400">$1</span>')  // String values
-    .replace(/(:\s*)(\d+)/g, '$1<span class="text-orange-600 dark:text-orange-400">$2</span>')  // Numbers
-    .replace(/(:\s*)(true|false|null)/g, '$1<span class="text-purple-600 dark:text-purple-400">$2</span>')  // Booleans/null
+// Helper to format CSS for export
+function formatCSSForExport(theme: CustomTheme): string {
+  const lightVars = Object.entries(theme.cssVarsLight)
+    .map(([key, value]) => `  ${key}: ${value};`)
+    .join('\n')
   
-  return <div dangerouslySetInnerHTML={{ __html: highlighted }} />
+  const darkVars = Object.entries(theme.cssVarsDark)
+    .map(([key, value]) => `  ${key}: ${value};`)
+    .join('\n')
+  
+  return `:root {\n${lightVars}\n}\n\n.dark {\n${darkVars}\n}`
 }
 
 function ExportDialog({ theme, open, onOpenChange }: ExportDialogProps) {
   const [copied, setCopied] = useState(false)
-  const [exportJson, setExportJson] = useState('')
+  const [exportCSS, setExportCSS] = useState('')
   
   useEffect(() => {
     if (theme && open) {
-      // Prepare the export data
-      const exportData = {
-        name: theme.name,
-        description: theme.description,
-        baseThemeId: theme.baseThemeId,
-        cssVarsLight: theme.cssVarsLight,
-        cssVarsDark: theme.cssVarsDark,
-      }
-      setExportJson(JSON.stringify(exportData, null, 2))
+      // Format as CSS
+      setExportCSS(formatCSSForExport(theme))
       setCopied(false)
     }
   }, [theme, open])
   
   const handleCopy = () => {
-    navigator.clipboard.writeText(exportJson)
+    navigator.clipboard.writeText(exportCSS)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -115,7 +110,7 @@ function ExportDialog({ theme, open, onOpenChange }: ExportDialogProps) {
         <DialogHeader>
           <DialogTitle>Export Theme</DialogTitle>
           <DialogDescription>
-            Copy the JSON below to share this theme with others.
+            Copy the CSS below to share this theme with other users or use it elsewhere.
           </DialogDescription>
         </DialogHeader>
         
@@ -123,7 +118,7 @@ function ExportDialog({ theme, open, onOpenChange }: ExportDialogProps) {
           <div className="relative">
             <div className="overflow-auto h-96 rounded-md border bg-muted/30 p-4">
               <pre className="font-mono text-xs whitespace-pre-wrap break-all">
-                {highlightJson(exportJson)}
+                {exportCSS}
               </pre>
             </div>
             <Button
@@ -157,98 +152,131 @@ function ExportDialog({ theme, open, onOpenChange }: ExportDialogProps) {
   )
 }
 
-function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps) {
-  const [jsonInput, setJsonInput] = useState('')
-  const [error, setError] = useState('')
-  const [isValidJson, setIsValidJson] = useState(false)
+// Get minimal theme fonts as defaults
+const getMinimalFonts = () => ({
+  '--font-sans': "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+  '--font-serif': 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+  '--font-mono': 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
+})
+
+// Helper to ensure theme has fonts
+function ensureFonts(cssVars: Record<string, string>): Record<string, string> {
+  const minimalFonts = getMinimalFonts()
+  const result = { ...cssVars }
   
-  // Validate JSON as user types
+  // Add fonts only if missing
+  if (!result['--font-sans']) result['--font-sans'] = minimalFonts['--font-sans']
+  if (!result['--font-serif']) result['--font-serif'] = minimalFonts['--font-serif']
+  if (!result['--font-mono']) result['--font-mono'] = minimalFonts['--font-mono']
+  
+  return result
+}
+
+// Helper to parse CSS format from ui.shadcn.com
+function parseCSSFormat(cssText: string): { light: Record<string, string>, dark: Record<string, string> } | null {
+  try {
+    const lightVars: Record<string, string> = {}
+    const darkVars: Record<string, string> = {}
+    
+    // Parse :root (light mode) variables
+    const rootMatch = cssText.match(/:root\s*{([^}]+)}/s)
+    if (rootMatch) {
+      const vars = rootMatch[1].matchAll(/--([a-z-]+):\s*([^;]+);/g)
+      for (const match of vars) {
+        const key = `--${match[1]}`
+        const value = match[2].trim()
+        lightVars[key] = value
+      }
+    }
+    
+    // Parse .dark variables
+    const darkMatch = cssText.match(/\.dark\s*{([^}]+)}/s)
+    if (darkMatch) {
+      const vars = darkMatch[1].matchAll(/--([a-z-]+):\s*([^;]+);/g)
+      for (const match of vars) {
+        const key = `--${match[1]}`
+        const value = match[2].trim()
+        darkVars[key] = value
+      }
+    }
+    
+    // Must have at least some variables
+    if (Object.keys(lightVars).length === 0 && Object.keys(darkVars).length === 0) {
+      return null
+    }
+    
+    return { light: lightVars, dark: darkVars }
+  } catch {
+    return null
+  }
+}
+
+function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps) {
+  const [input, setInput] = useState('')
+  const [themeName, setThemeName] = useState('')
+  const [error, setError] = useState('')
+  const [isValid, setIsValid] = useState(false)
+  
+  // Validate CSS input
   useEffect(() => {
-    if (!jsonInput.trim()) {
-      setIsValidJson(false)
+    if (!input.trim()) {
+      setIsValid(false)
       return
     }
-    try {
-      JSON.parse(jsonInput)
-      setIsValidJson(true)
-    } catch {
-      setIsValidJson(false)
+    
+    // Check if it's valid CSS format
+    if (input.includes(':root') || input.includes('.dark')) {
+      const parsed = parseCSSFormat(input)
+      setIsValid(!!parsed)
+    } else {
+      setIsValid(false)
     }
-  }, [jsonInput])
+  }, [input])
   
   const handleImport = () => {
     try {
-      // Validate JSON
-      const parsed = JSON.parse(jsonInput)
-      
-      // Check if it's a shadcn/tweakcn format
-      if (parsed.$schema?.includes('shadcn') || parsed.type === 'registry:style' || (parsed.cssVars && !parsed.cssVarsLight)) {
-        // Convert shadcn format to our format
-        const converted = {
-          name: parsed.name,
-          description: parsed.description || 'Imported from tweakcn.com',
-          baseThemeId: 'minimal', // Default to minimal as base
-          cssVarsLight: {} as Record<string, string>,
-          cssVarsDark: {} as Record<string, string>
-        }
-        
-        // Process light theme
-        if (parsed.cssVars?.light) {
-          Object.entries(parsed.cssVars.light).forEach(([key, value]) => {
-            // Skip non-color properties that might be in the format
-            if (typeof value === 'string') {
-              converted.cssVarsLight[`--${key}`] = value
-            }
-          })
-        }
-        
-        // Process dark theme
-        if (parsed.cssVars?.dark) {
-          Object.entries(parsed.cssVars.dark).forEach(([key, value]) => {
-            // Skip non-color properties that might be in the format
-            if (typeof value === 'string') {
-              converted.cssVarsDark[`--${key}`] = value
-            }
-          })
-        }
-        
-        // Also include theme-level vars in both light and dark
-        if (parsed.cssVars?.theme) {
-          Object.entries(parsed.cssVars.theme).forEach(([key, value]) => {
-            if (typeof value === 'string') {
-              converted.cssVarsLight[`--${key}`] = value
-              converted.cssVarsDark[`--${key}`] = value
-            }
-          })
-        }
-        
-        // Ensure we have at least the essential variables
-        if (!converted.cssVarsLight['--background'] || !converted.cssVarsDark['--background']) {
-          setError('Theme is missing essential color variables.')
-          return
-        }
-        
-        onImport(JSON.stringify(converted))
-      } else if (parsed.name && parsed.cssVarsLight && parsed.cssVarsDark) {
-        // It's already in our format
-        onImport(jsonInput)
-      } else {
-        setError('Invalid theme format. Missing required fields.')
+      // Parse CSS format
+      const parsed = parseCSSFormat(input)
+      if (!parsed) {
+        setError('Invalid CSS format. Please check your input.')
         return
       }
       
-      setJsonInput('')
+      // CSS format requires a theme name
+      if (!themeName.trim()) {
+        setError('Please enter a name for this theme.')
+        return
+      }
+      
+      const themeData = {
+        name: themeName.trim(),
+        description: 'Imported theme',
+        baseThemeId: 'minimal',
+        cssVarsLight: ensureFonts(parsed.light),
+        cssVarsDark: ensureFonts(parsed.dark)
+      }
+      
+      // Ensure we have at least the essential variables
+      if (!themeData.cssVarsLight['--background'] || !themeData.cssVarsDark['--background']) {
+        setError('Theme is missing essential color variables.')
+        return
+      }
+      
+      onImport(themeData)
+      setInput('')
+      setThemeName('')
       setError('')
       onOpenChange(false)
     } catch (e) {
-      setError('Invalid JSON format. Please check your input.')
+      setError('Failed to parse CSS. Please check the format.')
     }
   }
   
   return (
     <Dialog open={open} onOpenChange={(open) => {
       if (!open) {
-        setJsonInput('')
+        setInput('')
+        setThemeName('')
         setError('')
       }
       onOpenChange(open)
@@ -257,29 +285,43 @@ function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps) {
         <DialogHeader>
           <DialogTitle>Import Theme</DialogTitle>
           <DialogDescription>
-            Paste theme JSON below. Supports both our format and shadcn/ui themes from tweakcn.com.
+            Paste CSS theme data from another user or from ui.shadcn.com / tweakcn.com
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
+          {/* Theme name input */}
           <div className="space-y-2">
+            <Label htmlFor="theme-name">Theme Name</Label>
+            <Input
+              id="theme-name"
+              value={themeName}
+              onChange={(e) => setThemeName(e.target.value)}
+              placeholder="Enter a name for this theme"
+              required
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="theme-data">CSS Theme Data</Label>
             <div className="relative">
               <Textarea
-                value={jsonInput}
+                id="theme-data"
+                value={input}
                 onChange={(e) => {
-                  setJsonInput(e.target.value)
+                  setInput(e.target.value)
                   setError('')
                 }}
-                placeholder='Paste theme JSON here (supports tweakcn.com exports)'
+                placeholder={`:root {\n  --background: oklch(1 0 0);\n  --foreground: oklch(0.1450 0 0);\n  ...\n}\n\n.dark {\n  --background: oklch(0.1450 0 0);\n  --foreground: oklch(0.9850 0 0);\n  ...\n}`}
                 className={cn(
-                  "font-mono text-xs h-96",
-                  isValidJson && "text-green-600 dark:text-green-400"
+                  "font-mono text-xs h-80",
+                  isValid && "text-blue-600 dark:text-blue-400"
                 )}
               />
-              {isValidJson && (
+              {isValid && (
                 <Badge variant="outline" className="absolute top-2 right-2 text-xs">
                   <Check className="h-3 w-3 mr-1" />
-                  Valid JSON
+                  Valid CSS
                 </Badge>
               )}
             </div>
@@ -295,7 +337,7 @@ function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps) {
           </Button>
           <Button
             onClick={handleImport}
-            disabled={!jsonInput.trim()}
+            disabled={!input.trim() || !isValid || !themeName.trim()}
           >
             Import Theme
           </Button>
@@ -379,13 +421,15 @@ function ThemeEditor({ theme, open, onOpenChange }: ThemeEditorProps) {
 
 interface ThemeCardProps {
   theme: CustomTheme
+  isSelected: boolean
+  onSelect: () => void
   onEdit: () => void
   onDuplicate: () => void
   onExport: () => void
   onDelete: () => void
 }
 
-function CustomThemeCard({ theme, onEdit, onDuplicate, onExport, onDelete }: ThemeCardProps) {
+function CustomThemeCard({ theme, isSelected, onSelect, onEdit, onDuplicate, onExport, onDelete }: ThemeCardProps) {
   // Helper to extract color preview from theme
   const getThemeColors = () => {
     const isDark = document.documentElement.classList.contains('dark')
@@ -401,34 +445,58 @@ function CustomThemeCard({ theme, onEdit, onDuplicate, onExport, onDelete }: The
   const colors = getThemeColors()
   
   return (
-    <Card className="h-full hover:shadow-md transition-all duration-200">
+    <Card 
+      className={cn(
+        "h-full hover:shadow-md transition-all duration-200 cursor-pointer",
+        isSelected && "ring-2 ring-primary"
+      )}
+      onClick={onSelect}
+    >
       <CardHeader className="pb-2 sm:pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm sm:text-base">
+          <CardTitle className="text-sm sm:text-base flex items-center gap-2">
             {theme.name}
+            {isSelected && <Check className="h-4 w-4 text-primary" />}
           </CardTitle>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-8 w-8">
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="h-8 w-8"
+                onClick={(e) => e.stopPropagation()} // Prevent card click when clicking menu
+              >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation()
+                onEdit()
+              }}>
                 <Edit2 className="h-4 w-4 mr-2" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDuplicate}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation()
+                onDuplicate()
+              }}>
                 <Copy className="h-4 w-4 mr-2" />
                 Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onExport}>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation()
+                onExport()
+              }}>
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={onDelete}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete()
+                }}
                 className="text-destructive"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
@@ -484,6 +552,7 @@ function CustomThemeCard({ theme, onEdit, onDuplicate, onExport, onDelete }: The
 export function CustomThemesManager() {
   const { hasPremiumAccess, isLoading: isLicenseLoading } = useHasPremiumAccess()
   const queryClient = useQueryClient()
+  const { theme: currentTheme } = useTheme()
   const [deleteThemeId, setDeleteThemeId] = useState<number | null>(null)
   const [editTheme, setEditTheme] = useState<CustomTheme | null>(null)
   const [exportTheme, setExportTheme] = useState<CustomTheme | null>(null)
@@ -521,9 +590,8 @@ export function CustomThemesManager() {
   })
   
   const importMutation = useMutation({
-    mutationFn: async (jsonString: string) => {
-      const theme = JSON.parse(jsonString)
-      return api.importCustomTheme(theme)
+    mutationFn: async (themeData: any) => {
+      return api.importCustomTheme(themeData)
     },
     onSuccess: (theme) => {
       toast.success(`Imported "${theme.name}"`)
@@ -598,7 +666,7 @@ export function CustomThemesManager() {
           <>
             {themes.length === 0 ? (
               <div className="text-center py-8 space-y-3">
-                <FileJson className="h-12 w-12 mx-auto text-muted-foreground/50" />
+                <Sparkles className="h-12 w-12 mx-auto text-muted-foreground/50" />
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">
                     No custom themes created yet
@@ -622,6 +690,11 @@ export function CustomThemesManager() {
                     <CustomThemeCard
                       key={theme.id}
                       theme={theme}
+                      isSelected={currentTheme === `custom-${theme.id}`}
+                      onSelect={() => {
+                        setTheme(`custom-${theme.id}`)
+                        toast.success(`Applied theme: ${theme.name}`)
+                      }}
                       onEdit={() => setEditTheme(theme)}
                       onDuplicate={() => duplicateMutation.mutate(theme.id)}
                       onExport={() => setExportTheme(theme)}
@@ -672,7 +745,7 @@ export function CustomThemesManager() {
       <ImportDialog
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
-        onImport={(json) => importMutation.mutate(json)}
+        onImport={(themeData) => importMutation.mutate(themeData)}
       />
     </Card>
   )
