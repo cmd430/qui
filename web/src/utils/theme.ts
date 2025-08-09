@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { themes, getThemeById, getDefaultTheme, type Theme } from '@/config/themes';
+import { themes, getThemeById, getDefaultTheme, loadCustomThemes, type Theme } from '@/config/themes';
 import { loadThemeFonts } from './fontLoader';
 
 // Theme constants
@@ -295,6 +295,9 @@ export const setThemeMode = async (mode: ThemeMode): Promise<void> => {
 
 export const initializeTheme = async (): Promise<void> => {
   injectThemeStyles();
+
+  // Load custom themes first
+  await loadCustomThemes();
 
   const storedMode = getStoredMode();
   const theme = getCurrentTheme();

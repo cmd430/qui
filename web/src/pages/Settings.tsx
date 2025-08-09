@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Copy, Plus, Trash2, ExternalLink } from 'lucide-react'
 import { ThemeLicenseManager } from '@/components/themes/ThemeLicenseManager'
 import { ThemeSelector } from '@/components/themes/ThemeSelector'
+import { CustomThemesManager } from '@/components/themes/CustomThemesManager'
 import { useSearch } from '@tanstack/react-router'
 import {
   Dialog,
@@ -429,6 +430,7 @@ export function Settings() {
 
         <TabsContent value="themes" className="space-y-4">
           <ThemeSelector />
+          <CustomThemesManager />
           <ThemeLicenseManager />
         </TabsContent>
 

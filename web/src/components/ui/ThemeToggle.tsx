@@ -6,8 +6,8 @@ import {
   setThemeMode,
   type ThemeMode,
 } from "@/utils/theme";
-import { themes, isThemePremium } from "@/config/themes";
-import { Sun, Moon, Monitor, Check, Palette } from "lucide-react";
+import { getAllThemes, isThemePremium, isThemeCustom, refreshThemesList } from "@/config/themes";
+import { Sun, Moon, Monitor, Check, Palette, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -20,12 +20,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useHasPremiumAccess } from "@/hooks/useThemeLicense";
+import { useQuery } from "@tanstack/react-query";
+import { ColorCustomizer } from "@/components/themes/ColorCustomizerStable";
 
 // Constants
 const THEME_CHANGE_EVENT = "themechange";
 
 // Helper to extract primary color from theme
-function getThemePrimaryColor(theme: typeof themes[0]) {
+function getThemePrimaryColor(theme: ReturnType<typeof getAllThemes>[0]) {
   // Check if dark mode is active by looking at the document element
   const isDark = document.documentElement.classList.contains('dark');
   const cssVars = isDark ? theme.cssVars.dark : theme.cssVars.light;
@@ -61,7 +63,20 @@ const useThemeChange = () => {
 export const ThemeToggle: React.FC = () => {
   const { currentMode, currentTheme } = useThemeChange();
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showColorCustomizer, setShowColorCustomizer] = useState(false);
   const { hasPremiumAccess } = useHasPremiumAccess();
+  
+  // Refresh themes list when dropdown opens
+  useQuery({
+    queryKey: ['refresh-themes'],
+    queryFn: async () => {
+      await refreshThemesList();
+      return true;
+    },
+    staleTime: 30000, // Refresh every 30 seconds at most
+  });
+  
+  const themes = getAllThemes();
 
   const handleModeSelect = useCallback(async (mode: ThemeMode) => {
     setIsTransitioning(true);
@@ -74,8 +89,11 @@ export const ThemeToggle: React.FC = () => {
 
   const handleThemeSelect = useCallback(async (themeId: string) => {
     const isPremium = isThemePremium(themeId);
-    if (isPremium && !hasPremiumAccess) {
-      toast.error("This is a premium theme. Please purchase a license to use it.");
+    const isCustom = isThemeCustom(themeId);
+    
+    // Custom themes require premium access
+    if ((isPremium || isCustom) && !hasPremiumAccess) {
+      toast.error("This is a premium feature. Please purchase a license to use it.");
       return;
     }
 
@@ -85,9 +103,10 @@ export const ThemeToggle: React.FC = () => {
     
     const theme = themes.find(t => t.id === themeId);
     toast.success(`Switched to ${theme?.name || themeId} theme`);
-  }, [hasPremiumAccess]);
+  }, [hasPremiumAccess, themes]);
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
@@ -142,16 +161,20 @@ export const ThemeToggle: React.FC = () => {
         <div className="px-2 py-1.5 text-sm font-medium">Theme</div>
         {themes
           .sort((a, b) => {
+            // Sort order: regular themes first, then premium, then custom
+            const aIsCustom = isThemeCustom(a.id);
+            const bIsCustom = isThemeCustom(b.id);
             const aIsPremium = isThemePremium(a.id);
             const bIsPremium = isThemePremium(b.id);
-            // If both are premium or both are free, maintain existing order
-            if (aIsPremium === bIsPremium) return 0;
-            // Premium themes go last
-            return aIsPremium ? 1 : -1;
+            
+            if (aIsCustom !== bIsCustom) return aIsCustom ? 1 : -1;
+            if (aIsPremium !== bIsPremium) return aIsPremium ? 1 : -1;
+            return 0;
           })
           .map((theme) => {
           const isPremium = isThemePremium(theme.id);
-          const isLocked = isPremium && !hasPremiumAccess;
+          const isCustom = isThemeCustom(theme.id);
+          const isLocked = (isPremium || isCustom) && !hasPremiumAccess;
           
           return (
             <DropdownMenuItem
@@ -174,7 +197,10 @@ export const ThemeToggle: React.FC = () => {
                 />
                 <div className="flex items-center gap-1.5 flex-1">
                   <span>{theme.name}</span>
-                  {isPremium && (
+                  {isCustom && (
+                    <Sparkles className="h-3 w-3 text-primary" />
+                  )}
+                  {isPremium && !isCustom && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
                       Premium
                     </span>
@@ -185,7 +211,30 @@ export const ThemeToggle: React.FC = () => {
             </DropdownMenuItem>
           );
         })}
+        
+        {/* Color Customization - Premium Feature */}
+        {hasPremiumAccess && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => setShowColorCustomizer(true)}
+              className="flex items-center gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              <span className="flex-1">Customize Colors</span>
+              <Sparkles className="h-3 w-3 text-primary" />
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
+    
+    {/* Color Customizer Dialog */}
+    <ColorCustomizer 
+      open={showColorCustomizer}
+      onOpenChange={setShowColorCustomizer}
+      mode="dialog"
+    />
+    </>
   );
 };

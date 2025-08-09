@@ -12,6 +12,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -107,12 +111,26 @@ const COLOR_CATEGORIES: Record<ColorCategory, { label: string; colors: ColorKey[
   }
 }
 
-export function ColorCustomizer() {
+interface ColorCustomizerProps {
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  mode?: 'popover' | 'dialog' // Control how it's displayed
+}
+
+export function ColorCustomizer({ 
+  open: controlledOpen, 
+  onOpenChange: controlledOnOpenChange,
+  mode = 'popover' 
+}: ColorCustomizerProps = {}) {
   const { theme: currentThemeId } = useTheme()
   const { hasPremiumAccess, isLoading: isLicenseLoading } = useHasPremiumAccess()
-  const { colorOverrides, updateColors, resetColors, isUpdating, isResetting } = useThemeCustomizations()
+  const { colorOverrides, updateColors, isUpdating, isResetting } = useThemeCustomizations()
   
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  
+  // Use controlled or internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const setOpen = controlledOnOpenChange || setInternalOpen
   const [activeCategory, setActiveCategory] = useState<ColorCategory>('ui')
   const [activeColor, setActiveColor] = useState<ColorKey>('primary')
   const [copiedValue, setCopiedValue] = useState<string | null>(null)
@@ -187,16 +205,27 @@ export function ColorCustomizer() {
     if (!currentThemeId || !hasChanges) return
     
     const newColor = formatOklch(valuesRef.current.l, valuesRef.current.c, valuesRef.current.h)
-    updateColors({
+    
+    // Get existing overrides for this theme - make sure we have the full structure
+    const existingThemeOverrides = colorOverrides[currentThemeId] || { light: {}, dark: {} }
+    
+    // Build the complete structure preserving ALL modes
+    const newOverrides = {
       ...colorOverrides,
       [currentThemeId]: {
-        ...colorOverrides[currentThemeId],
-        [currentMode]: {
-          ...colorOverrides[currentThemeId]?.[currentMode],
-          [`--${activeColor}`]: newColor
-        }
+        // Ensure both modes exist, preserving existing data
+        light: existingThemeOverrides.light || {},
+        dark: existingThemeOverrides.dark || {},
       }
-    })
+    }
+    
+    // Now update only the current mode's specific color
+    newOverrides[currentThemeId][currentMode] = {
+      ...newOverrides[currentThemeId][currentMode],
+      [`--${activeColor}`]: newColor
+    }
+    
+    updateColors(newOverrides)
     setHasChanges(false)
   }, [currentThemeId, currentMode, activeColor, colorOverrides, updateColors, hasChanges])
   
@@ -247,19 +276,19 @@ export function ColorCustomizer() {
     const theme = getThemeById(currentThemeId)
     if (!theme) return
     
+    // Remove this theme's overrides entirely
     const newOverrides = { ...colorOverrides }
     delete newOverrides[currentThemeId]
     
-    if (Object.keys(newOverrides).length === 0) {
-      // If no overrides left at all, use the reset function
-      resetColors()
-    } else {
-      // Otherwise just update without this theme's overrides
-      updateColors(newOverrides)
-    }
+    // Always update the database - even if it results in an empty object
+    // This ensures the theme entry is removed from the database
+    updateColors(Object.keys(newOverrides).length === 0 ? {} : newOverrides)
     
-    // Reapply all original theme colors
-    const originalColors = currentMode === 'dark' ? theme.cssVars.dark : theme.cssVars.light
+    // Reapply all original theme colors for both modes
+    const lightColors = theme.cssVars.light
+    const darkColors = theme.cssVars.dark
+    const originalColors = currentMode === 'dark' ? darkColors : lightColors
+    
     Object.entries(originalColors).forEach(([key, value]) => {
       document.documentElement.style.setProperty(key, value)
     })
@@ -273,7 +302,7 @@ export function ColorCustomizer() {
     }
     
     setHasChanges(false)
-  }, [currentThemeId, currentMode, activeColor, colorOverrides, updateColors, resetColors])
+  }, [currentThemeId, currentMode, activeColor, colorOverrides, updateColors])
   
   const handleColorSwitch = useCallback((color: ColorKey) => {
     setActiveColor(color)
@@ -305,61 +334,62 @@ export function ColorCustomizer() {
   }, [])
   
   // Collect all current colors (including customizations)
-  const collectCurrentColors = useCallback(() => {
+  const collectCurrentColors = useCallback((mode?: 'light' | 'dark') => {
     const colors: Record<string, string> = {}
-    const root = document.documentElement
     
-    // Get all color variables we track
-    const allColors = [
-      ...COLOR_CATEGORIES.base.colors,
-      ...COLOR_CATEGORIES.ui.colors,
-      ...COLOR_CATEGORIES.semantic.colors,
-      ...COLOR_CATEGORIES.chart.colors,
-      ...COLOR_CATEGORIES.sidebar.colors
-    ]
-    
-    allColors.forEach(color => {
-      const value = getComputedStyle(root).getPropertyValue(`--${color}`).trim()
-      if (value) {
-        colors[`--${color}`] = value
+    // If mode is specified, get from theme + overrides
+    if (mode) {
+      const theme = getThemeById(currentThemeId)
+      if (theme) {
+        const baseColors = mode === 'dark' ? theme.cssVars.dark : theme.cssVars.light
+        // Start with base theme colors
+        Object.assign(colors, baseColors)
+        // Apply any customizations for this mode
+        if (colorOverrides[currentThemeId]?.[mode]) {
+          Object.assign(colors, colorOverrides[currentThemeId][mode])
+        }
       }
-    })
+    } else {
+      // Get from currently rendered DOM (current mode)
+      const root = document.documentElement
+      
+      // Get all color variables we track
+      const allColors = [
+        ...COLOR_CATEGORIES.base.colors,
+        ...COLOR_CATEGORIES.ui.colors,
+        ...COLOR_CATEGORIES.semantic.colors,
+        ...COLOR_CATEGORIES.chart.colors,
+        ...COLOR_CATEGORIES.sidebar.colors
+      ]
+      
+      allColors.forEach(color => {
+        const value = getComputedStyle(root).getPropertyValue(`--${color}`).trim()
+        if (value) {
+          colors[`--${color}`] = value
+        }
+      })
+    }
     
     return colors
-  }, [])
+  }, [currentThemeId, colorOverrides])
   
   if (!isLicenseLoading && !hasPremiumAccess) {
     return null
   }
 
-  return (
+  // The main content that will be used in both dialog and popover
+  const customizationContent = (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon"
-          className={cn(
-            "relative",
-            hasChanges && "ring-2 ring-primary ring-offset-2"
-          )}
-        >
-          <Palette className="h-4 w-4" />
-          {hasChanges && (
-            <span className="absolute -top-1 -right-1 h-2 w-2 bg-primary rounded-full animate-pulse" />
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[440px] p-0" align="end">
-        <div className="flex items-center justify-between p-4 pb-2">
-          <div className="flex items-center gap-2">
-            <Palette className="h-5 w-5" />
-            <h3 className="font-semibold">Customize Colors</h3>
-            <Badge variant="secondary" className="text-xs">
-              <Sparkles className="h-3 w-3 mr-1" />
-              Premium
-            </Badge>
-          </div>
+      <div className="flex items-center justify-between p-4 pb-2">
+        <div className="flex items-center gap-2">
+          <Palette className="h-5 w-5" />
+          <h3 className="font-semibold">Customize Colors</h3>
+          <Badge variant="secondary" className="text-xs">
+            <Sparkles className="h-3 w-3 mr-1" />
+            Premium
+          </Badge>
+        </div>
+        {mode === 'popover' && (
           <Button
             variant="ghost"
             size="icon"
@@ -368,7 +398,8 @@ export function ColorCustomizer() {
           >
             <X className="h-4 w-4" />
           </Button>
-        </div>
+        )}
+      </div>
         
         <Separator />
         
@@ -579,6 +610,56 @@ export function ColorCustomizer() {
             </Button>
           </div>
         </div>
+    </>
+  )
+  
+  // Render as Dialog or Popover based on mode
+  if (mode === 'dialog') {
+    return (
+      <>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent className="max-w-[480px] p-0">
+            {customizationContent}
+          </DialogContent>
+        </Dialog>
+      
+        {/* Pass collected colors to ThemeCreator when it's shown */}
+        {showThemeCreator && (
+          <ThemeCreator
+            open={showThemeCreator}
+            onOpenChange={setShowThemeCreator}
+            baseThemeId={currentThemeId}
+            initialColors={{
+              light: collectCurrentColors('light'),
+              dark: collectCurrentColors('dark')
+            }}
+          />
+        )}
+      </>
+    )
+  }
+  
+  // Default: Render as Popover with button trigger
+  return (
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            className={cn(
+              "relative",
+              hasChanges && "ring-2 ring-primary ring-offset-2"
+            )}
+          >
+            <Palette className="h-4 w-4" />
+            {hasChanges && (
+              <span className="absolute -top-1 -right-1 h-2 w-2 bg-primary rounded-full animate-pulse" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[440px] p-0" align="end">
+          {customizationContent}
         </PopoverContent>
       </Popover>
       
@@ -589,8 +670,8 @@ export function ColorCustomizer() {
           onOpenChange={setShowThemeCreator}
           baseThemeId={currentThemeId}
           initialColors={{
-            light: currentMode === 'light' ? collectCurrentColors() : {},
-            dark: currentMode === 'dark' ? collectCurrentColors() : {}
+            light: collectCurrentColors('light'),
+            dark: collectCurrentColors('dark')
           }}
         />
       )}

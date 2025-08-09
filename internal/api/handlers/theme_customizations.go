@@ -133,6 +133,24 @@ func (h *ThemeCustomizationsHandler) UpdateCustomizations(w http.ResponseWriter,
 		return
 	}
 	
+	// Check if we have an empty overrides object - if so, delete the record
+	if len(req.ColorOverrides) == 0 {
+		// Delete the customizations entirely
+		_, err := h.db.Exec(`DELETE FROM theme_customizations WHERE id = 1`)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to delete theme customizations")
+			http.Error(w, "Failed to reset customizations", http.StatusInternalServerError)
+			return
+		}
+		
+		// Return empty response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ThemeCustomizationsResponse{
+			ColorOverrides: make(ColorOverrides),
+		})
+		return
+	}
+	
 	colorOverridesJSON, err := json.Marshal(req.ColorOverrides)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal color overrides")
