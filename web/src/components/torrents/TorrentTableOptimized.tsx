@@ -636,16 +636,24 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
           const viewportTop = firstItem.index;
           const viewportBottom = lastItem?.index || viewportTop;
           
-          // If user has scrolled back to early items (first 500), reset to base load
-          if (viewportTop < 500) {
-            const targetLoadedRows = Math.max(200, viewportBottom + 100);
-            if (targetLoadedRows < safeLoadedRows - 200) { // Only shrink if significant difference
+          // Calculate dynamic thresholds based on total dataset size
+          const totalItems = Math.max(sortedTorrents.length, 1);
+          const earlyItemsThreshold = Math.min(500, totalItems * 0.1); // First 10% or 500, whichever is smaller
+          const baseBuffer = Math.min(200, totalItems * 0.05); // 5% buffer or 200, whichever is smaller
+          const minLoadedRows = Math.min(300, totalItems * 0.1); // Minimum 10% or 300, whichever is smaller
+          const shrinkThreshold = Math.max(200, totalItems * 0.02); // Shrink threshold: 2% or 200, whichever is larger
+          
+          // If user has scrolled back to early items, reset to base load
+          if (viewportTop < earlyItemsThreshold) {
+            const targetLoadedRows = Math.max(minLoadedRows, viewportBottom + baseBuffer);
+            if (targetLoadedRows < safeLoadedRows - shrinkThreshold) {
               setLoadedRows(targetLoadedRows);
             }
           } else {
-            // For middle sections, keep a smaller buffer
-            const targetLoadedRows = Math.max(300, viewportBottom + 150);
-            if (targetLoadedRows < safeLoadedRows - 300) { // Only shrink if significant difference
+            // For middle sections, keep a buffer proportional to dataset size
+            const midBuffer = Math.min(300, totalItems * 0.08); // 8% buffer or 300, whichever is smaller
+            const targetLoadedRows = Math.max(minLoadedRows, viewportBottom + midBuffer);
+            if (targetLoadedRows < safeLoadedRows - shrinkThreshold) {
               setLoadedRows(targetLoadedRows);
             }
           }
@@ -691,8 +699,9 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
       } else if (prev < targetRows) {
         // Not enough rows loaded, load at least 100
         return targetRows
-      } else if (prev > 1000 && targetRows <= 100) {
-        // If we had loaded way too many and now have few items, reset
+      } else if (prev > sortedTorrents.length * 0.5 && targetRows <= 100) {
+        // If we had loaded more than half the total items and now have few items, reset
+        // This handles cases where filters dramatically reduce the dataset
         return targetRows
       }
       return prev
@@ -1604,15 +1613,19 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
                 {totalCount} torrent{totalCount !== 1 ? 's' : ''}
                 {safeLoadedRows < rows.length && ` • ${safeLoadedRows} loaded in viewport`}
                 {safeLoadedRows < rows.length && safeLoadedRows < totalCount && ' (scroll for more)'}
-                {safeLoadedRows < totalCount && safeLoadedRows > 300 && (
+                {safeLoadedRows < totalCount && safeLoadedRows > Math.min(300, totalCount * 0.1) && (
                   <button
                     onClick={() => {
                       // Get current viewport position
                       const vRows = virtualizer.getVirtualItems();
                       const currentTop = vRows.length > 0 ? vRows[0].index : 0;
                       
+                      // Calculate dynamic buffer based on total dataset size
+                      const buffer = Math.min(300, Math.max(100, totalCount * 0.05));
+                      const minTarget = Math.min(200, totalCount * 0.05);
+                      
                       // Reset to a reasonable size but keep the current position in view
-                      const targetRows = Math.max(300, currentTop + 200);
+                      const targetRows = Math.max(minTarget, currentTop + buffer);
                       setLoadedRows(Math.min(targetRows, totalCount));
                     }}
                     className="ml-2 text-xs text-primary hover:underline"
