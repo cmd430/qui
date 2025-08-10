@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getCurrentThemeMode, getCurrentTheme, setTheme, setThemeMode, type ThemeMode } from "@/utils/theme";
 import { getAllThemes, isThemePremium, isThemeCustom, refreshThemesList } from "@/config/themes";
-import { Sun, Moon, Monitor, Palette, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Sun, Moon, Monitor, Palette, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
