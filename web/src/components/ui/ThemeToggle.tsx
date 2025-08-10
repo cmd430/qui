@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { getCurrentThemeMode, getCurrentTheme, setTheme, setThemeMode, type ThemeMode } from "@/utils/theme";
 import { getAllThemes, isThemePremium, isThemeCustom, refreshThemesList } from "@/config/themes";
 import { Sun, Moon, Monitor, Palette, SlidersHorizontal } from "lucide-react";
@@ -15,7 +15,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useHasPremiumAccess } from "@/hooks/useThemeLicense";
 import { useQuery } from "@tanstack/react-query";
-import { ColorCustomizer } from "@/components/themes/ColorCustomizer";
+
+// Lazy load the ColorCustomizer component
+const ColorCustomizer = lazy(() => import("@/components/themes/ColorCustomizer").then(m => ({ default: m.ColorCustomizer })));
 
 const THEME_CHANGE_EVENT = "themechange";
 const MODE_ICONS = { light: Sun, dark: Moon, auto: Monitor };
@@ -181,7 +183,11 @@ export const ThemeToggle: React.FC = () => {
         </DropdownMenuContent>
       </DropdownMenu>
       
-      <ColorCustomizer open={showColorCustomizer} onOpenChange={setShowColorCustomizer} mode="dialog" />
+      {showColorCustomizer && (
+        <Suspense fallback={null}>
+          <ColorCustomizer open={showColorCustomizer} onOpenChange={setShowColorCustomizer} mode="dialog" />
+        </Suspense>
+      )}
     </>
   );
 };

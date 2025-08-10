@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Copy, Check } from 'lucide-react'
@@ -15,7 +16,7 @@ interface ColorInputProps {
   copied: boolean
 }
 
-export function ColorInput({ 
+export const ColorInput = memo(function ColorInput({ 
   value, 
   onChange, 
   placeholder, 
@@ -44,4 +45,4 @@ export function ColorInput({
       </Button>
     </div>
   )
-}
+})

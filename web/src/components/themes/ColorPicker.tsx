@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { memo } from 'react'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -27,7 +28,7 @@ interface ColorPickerProps {
   currentMode: 'light' | 'dark'
 }
 
-export function ColorPicker({
+export const ColorPicker = memo(function ColorPicker({
   activeCategory,
   setActiveCategory,
   activeColor,
@@ -153,4 +154,4 @@ export function ColorPicker({
       </div>
     </div>
   )
-}
+})

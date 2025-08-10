@@ -21,11 +21,66 @@ import {
   useRefreshThemeLicenses,
   useAllLicenses
 } from '@/hooks/useThemeLicense'
-import { Key, Trash2, RefreshCw, Sparkles, Copy } from 'lucide-react'
+import { Key, Trash2, RefreshCw, Sparkles, Copy, Eye, EyeOff } from 'lucide-react'
+import { maskLicenseKey } from '@/utils/maskLicenseKey'
+
+interface LicenseItemProps {
+  license: { licenseKey: string; createdAt: string }
+  isVisible: boolean
+  onToggleVisibility: () => void
+  onDelete: () => void
+}
+
+function LicenseItem({ license, isVisible, onToggleVisibility, onDelete }: LicenseItemProps) {
+  return (
+    <div className="p-3 bg-muted/30 rounded-lg">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="font-mono text-xs leading-relaxed break-all">
+              {isVisible ? license.licenseKey : maskLicenseKey(license.licenseKey)}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleVisibility}
+              className="flex-shrink-0 h-6 w-6"
+            >
+              {isVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                navigator.clipboard.writeText(license.licenseKey)
+                toast.success('License key copied to clipboard')
+              }}
+              className="flex-shrink-0 h-6 w-6"
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Premium Access • Added {new Date(license.createdAt).toLocaleDateString()}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onDelete}
+          className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0 h-8 w-8"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export function ThemeLicenseManager() {
   const [showAddLicense, setShowAddLicense] = useState(false)
   const [selectedLicenseKey, setSelectedLicenseKey] = useState<string | null>(null)
+  const [showFullKey, setShowFullKey] = useState<string | null>(null)
   
   const { hasPremiumAccess, isLoading } = useHasPremiumAccess()
   const { data: licenses } = useAllLicenses()
@@ -195,26 +250,15 @@ export function ThemeLicenseManager() {
               </h4>
               <div className="space-y-2">
                 {licenses.map((license) => (
-                  <div key={license.licenseKey} className="p-3 bg-muted/30 rounded-lg">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="font-mono text-xs leading-relaxed break-all">
-                          {license.licenseKey}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Premium Access • Added {new Date(license.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteLicense(license.licenseKey)}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0 h-8 w-8"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                  <LicenseItem
+                    key={license.licenseKey}
+                    license={license}
+                    isVisible={showFullKey === license.licenseKey}
+                    onToggleVisibility={() => 
+                      setShowFullKey(showFullKey === license.licenseKey ? null : license.licenseKey)
+                    }
+                    onDelete={() => handleDeleteLicense(license.licenseKey)}
+                  />
                 ))}
               </div>
             </div>

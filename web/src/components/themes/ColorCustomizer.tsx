@@ -6,6 +6,7 @@
 import { useHasPremiumAccess } from '@/hooks/useThemeLicense'
 import { ColorCustomizerDialog } from './ColorCustomizerDialog'
 import { ColorCustomizerPopover } from './ColorCustomizerPopover'
+import { ThemeErrorBoundary } from './ThemeErrorBoundary'
 
 export function ColorCustomizer({ 
   open, 
@@ -20,14 +21,17 @@ export function ColorCustomizer({
   
   if (!isLicenseLoading && !hasPremiumAccess) return null
   
-  if (mode === 'dialog') {
-    // Dialog mode requires both props
-    if (open === undefined || onOpenChange === undefined) {
-      console.warn('ColorCustomizer: dialog mode requires open and onOpenChange props')
-      return null
-    }
-    return <ColorCustomizerDialog open={open} onOpenChange={onOpenChange} />
+  if (mode === 'dialog' && (open === undefined || onOpenChange === undefined)) {
+    return null
   }
-  
-  return <ColorCustomizerPopover open={open} onOpenChange={onOpenChange} />
+
+  return (
+    <ThemeErrorBoundary>
+      {mode === 'dialog' ? (
+        <ColorCustomizerDialog open={open!} onOpenChange={onOpenChange!} />
+      ) : (
+        <ColorCustomizerPopover open={open} onOpenChange={onOpenChange} />
+      )}
+    </ThemeErrorBoundary>
+  )
 }

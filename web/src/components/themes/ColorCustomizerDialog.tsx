@@ -12,6 +12,7 @@ import { useColorCustomizer } from '@/hooks/useColorCustomizer'
 import { ColorPicker } from './ColorPicker'
 import { ColorResetMenu } from './ColorResetMenu'
 import { ThemeCreator } from './ThemeCreator'
+import { ThemeErrorBoundary } from './ThemeErrorBoundary'
 import { getThemeById } from '@/config/themes'
 import { COLOR_CATEGORIES } from '@/constants/colors'
 
@@ -80,19 +81,21 @@ export function ColorCustomizerDialog({ open, onOpenChange }: ColorCustomizerDia
           </div>
         </DraggableDialogHandle>
         
-        <ColorPicker
-          activeCategory={activeCategory}
-          setActiveCategory={setActiveCategory}
-          activeColor={activeColor}
-          setActiveColor={setActiveColor}
-          parsedColor={parsedColor}
-          updateColorValue={updateColorValue}
-          copyToClipboard={copyToClipboard}
-          copiedValue={copiedValue}
-          colorOverrides={colorOverrides}
-          currentThemeId={currentThemeId}
-          currentMode={currentMode}
-        />
+        <ThemeErrorBoundary>
+          <ColorPicker
+            activeCategory={activeCategory}
+            setActiveCategory={setActiveCategory}
+            activeColor={activeColor}
+            setActiveColor={setActiveColor}
+            parsedColor={parsedColor}
+            updateColorValue={updateColorValue}
+            copyToClipboard={copyToClipboard}
+            copiedValue={copiedValue}
+            colorOverrides={colorOverrides}
+            currentThemeId={currentThemeId}
+            currentMode={currentMode}
+          />
+        </ThemeErrorBoundary>
         
         <div className="flex items-center justify-between p-4 pt-2 gap-2 border-t">
           <ColorResetMenu activeColor={activeColor} resetColor={resetColor} />

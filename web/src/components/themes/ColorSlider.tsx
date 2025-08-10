@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { memo } from 'react'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 
@@ -17,7 +18,7 @@ interface ColorSliderProps {
   precision?: number
 }
 
-export function ColorSlider({ 
+export const ColorSlider = memo(function ColorSlider({ 
   label, 
   value, 
   onChange, 
@@ -46,4 +47,4 @@ export function ColorSlider({
       />
     </div>
   )
-}
+})

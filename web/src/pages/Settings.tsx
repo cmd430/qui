@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, lazy, Suspense } from 'react'
 import { useForm } from '@tanstack/react-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -11,10 +11,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Copy, Plus, Trash2, ExternalLink } from 'lucide-react'
-import { ThemeLicenseManager } from '@/components/themes/ThemeLicenseManager'
 import { ThemeSelector } from '@/components/themes/ThemeSelector'
-import { CustomThemesManager } from '@/components/themes/CustomThemesManager'
 import { useSearch } from '@tanstack/react-router'
+
+// Lazy load premium theme components
+const ThemeLicenseManager = lazy(() => import('@/components/themes/ThemeLicenseManager').then(m => ({ default: m.ThemeLicenseManager })))
+const CustomThemesManager = lazy(() => import('@/components/themes/CustomThemesManager').then(m => ({ default: m.CustomThemesManager })))
 import {
   Dialog,
   DialogContent,
@@ -430,8 +432,10 @@ export function Settings() {
 
         <TabsContent value="themes" className="space-y-4">
           <ThemeSelector />
-          <CustomThemesManager />
-          <ThemeLicenseManager />
+          <Suspense fallback={<div className="text-sm text-muted-foreground">Loading theme manager...</div>}>
+            <CustomThemesManager />
+            <ThemeLicenseManager />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="api" className="space-y-4">

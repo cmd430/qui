@@ -12,6 +12,7 @@ import { parseOklch, formatOklch } from '@/utils/colors'
 import { getThemeById } from '@/config/themes'
 import { COPY_FEEDBACK_DURATION } from '@/constants/timings'
 import { DEFAULT_COLOR } from '@/constants/colors'
+import { debounce } from '@/utils/debounce'
 
 // Type for theme color overrides structure
 type ColorOverrides = Record<string, Record<string, Record<string, string>>>
@@ -69,17 +70,25 @@ export function useColorCustomizer() {
     setActiveColor(color)
   }, [])
   
+  // Create a debounced version of updating edited colors
+  const debouncedSetEditedColors = useMemo(
+    () => debounce((key: string, color: string) => {
+      setEditedColors(prev => ({ ...prev, [key]: color }))
+      setHasChanges(true)
+    }, 300),
+    []
+  )
+  
   const updateColorValue = useCallback((l: number, c: number, h: number) => {
     const color = formatOklch(l, c, h)
     const key = `--${activeColor}`
     
-    // Update edited colors
-    setEditedColors(prev => ({ ...prev, [key]: color }))
-    
-    // Update DOM for visual preview
+    // Update DOM immediately for visual preview
     document.documentElement.style.setProperty(key, color)
-    setHasChanges(true)
-  }, [activeColor])
+    
+    // Debounce the state update to reduce re-renders
+    debouncedSetEditedColors(key, color)
+  }, [activeColor, debouncedSetEditedColors])
   
   const saveChanges = useCallback(async () => {
     if (!currentThemeId || !hasChanges) return
@@ -107,7 +116,7 @@ export function useColorCustomizer() {
       console.error('Failed to save customizations:', error)
       toast.error('Failed to save customizations')
     }
-  }, [currentThemeId, currentMode, colorValues, hasChanges, savedOverrides, updateColors])
+  }, [currentThemeId, currentMode, editedColors, hasChanges, savedOverrides, updateColors])
   
   const resetColor = useCallback(async (resetAll: boolean) => {
     if (!currentThemeId) return
