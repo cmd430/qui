@@ -1606,9 +1606,17 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
                 {safeLoadedRows < rows.length && safeLoadedRows < totalCount && ' (scroll for more)'}
                 {safeLoadedRows < totalCount && safeLoadedRows > 300 && (
                   <button
-                    onClick={() => setLoadedRows(Math.min(200, totalCount))}
+                    onClick={() => {
+                      // Get current viewport position
+                      const vRows = virtualizer.getVirtualItems();
+                      const currentTop = vRows.length > 0 ? vRows[0].index : 0;
+                      
+                      // Reset to a reasonable size but keep the current position in view
+                      const targetRows = Math.max(300, currentTop + 200);
+                      setLoadedRows(Math.min(targetRows, totalCount));
+                    }}
                     className="ml-2 text-xs text-primary hover:underline"
-                    title="Reset to show fewer items for better performance"
+                    title="Reduce loaded items while maintaining current position"
                   >
                     reset view
                   </button>
