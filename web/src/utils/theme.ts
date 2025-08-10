@@ -173,6 +173,16 @@ const dispatchThemeChange = (mode: ThemeMode, theme: Theme, isSystemChange: bool
   window.dispatchEvent(event);
 };
 
+// Helper to get theme customizations from localStorage
+const getStoredCustomizations = (): Record<string, Record<string, Record<string, string>>> => {
+  try {
+    const stored = localStorage.getItem('theme-customizations');
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
 // Core theme application logic
 const applyTheme = async (theme: Theme, isDark: boolean, withTransition = false): Promise<void> => {
   const root = document.documentElement;
@@ -196,6 +206,17 @@ const applyTheme = async (theme: Theme, isDark: boolean, withTransition = false)
   Object.entries(cssVars).forEach(([key, value]) => {
     root.style.setProperty(key, value);
   });
+
+  // Apply any stored customizations for this theme
+  const customizations = getStoredCustomizations();
+  const currentMode = isDark ? 'dark' : 'light';
+  const themeCustomizations = customizations[theme.id]?.[currentMode];
+  
+  if (themeCustomizations) {
+    Object.entries(themeCustomizations).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+  }
 
   // Add theme class
   root.setAttribute('data-theme', theme.id);
@@ -296,10 +317,11 @@ export const setThemeMode = async (mode: ThemeMode): Promise<void> => {
 export const initializeTheme = async (): Promise<void> => {
   injectThemeStyles();
 
-  // Load custom themes first
+  // Load custom themes first and wait for them
   await loadCustomThemes();
 
   const storedMode = getStoredMode();
+  // Get theme AFTER custom themes are loaded
   const theme = getCurrentTheme();
   const systemPreference = getSystemPreference();
 
@@ -317,6 +339,16 @@ export const initializeTheme = async (): Promise<void> => {
   }
 
   await applyTheme(theme, isDark, false);
+
+  // Check if we got the right theme (in case custom theme wasn't found initially)
+  const storedThemeId = getStoredThemeId();
+  if (storedThemeId && theme.id !== storedThemeId) {
+    // Try to get the theme again now that custom themes are loaded
+    const correctTheme = getThemeById(storedThemeId);
+    if (correctTheme && correctTheme.id !== theme.id) {
+      await applyTheme(correctTheme, isDark, false);
+    }
+  }
 
   // Always listen for system theme changes
   addMediaQueryListener(systemPreference, handleSystemThemeChange);

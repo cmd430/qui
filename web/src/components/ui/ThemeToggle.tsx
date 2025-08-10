@@ -117,7 +117,11 @@ export const ThemeToggle: React.FC = () => {
           style={{ backgroundColor: getThemePrimaryColor(theme) }}
         />
         <span className="flex-1">{theme.name}</span>
-        {isCustom && <Sparkles className="h-3 w-3 text-primary" />}
+        {isCustom && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
+            Custom
+          </span>
+        )}
         {isPremium && !isCustom && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium">
             Premium
@@ -170,8 +174,7 @@ export const ThemeToggle: React.FC = () => {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setShowColorCustomizer(true)} className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4" />
-                <span className="flex-1">Customize Colors</span>
-                <Sparkles className="h-3 w-3 text-primary" />
+                <span>Customize Colors</span>
               </DropdownMenuItem>
             </>
           )}

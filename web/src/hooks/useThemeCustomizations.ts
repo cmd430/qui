@@ -15,7 +15,14 @@ export function useThemeCustomizations() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['theme-customizations'],
-    queryFn: api.getThemeCustomizations,
+    queryFn: async () => {
+      const serverData = await api.getThemeCustomizations()
+      // Sync server data to localStorage on load
+      if (serverData?.colorOverrides) {
+        localStorage.setItem('theme-customizations', JSON.stringify(serverData.colorOverrides))
+      }
+      return serverData
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error: any) => {
       // Don't retry on 403 (no premium access)
@@ -27,8 +34,12 @@ export function useThemeCustomizations() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: (colorOverrides: ColorOverrides) => 
-      api.updateThemeCustomizations(colorOverrides),
+    mutationFn: (colorOverrides: ColorOverrides) => {
+      // Save to localStorage for immediate application
+      localStorage.setItem('theme-customizations', JSON.stringify(colorOverrides))
+      // Also save to server for persistence
+      return api.updateThemeCustomizations(colorOverrides)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['theme-customizations'] })
       toast.success('Theme colors saved')
@@ -43,7 +54,12 @@ export function useThemeCustomizations() {
   })
 
   const resetMutation = useMutation({
-    mutationFn: api.resetThemeCustomizations,
+    mutationFn: () => {
+      // Clear from localStorage
+      localStorage.removeItem('theme-customizations')
+      // Also reset on server
+      return api.resetThemeCustomizations()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['theme-customizations'] })
       toast.success('Theme colors reset to defaults')

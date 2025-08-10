@@ -9,27 +9,30 @@ import { useThemeCustomizations } from '@/hooks/useThemeCustomizations'
 
 /**
  * Provider component that applies theme color customizations
- * when theme or mode changes
  */
 export function ThemeCustomizationProvider({ children }: { children: React.ReactNode }) {
-  const { theme: currentThemeId, mode } = useTheme()
-  const { colorOverrides } = useThemeCustomizations()
+  const { theme: currentThemeId } = useTheme()
+  const { colorOverrides, isLoading } = useThemeCustomizations()
   
   useEffect(() => {
-    // Determine which mode's colors to apply
+    if (isLoading || !colorOverrides || !currentThemeId) {
+      return
+    }
+    
+    // Determine current mode from DOM
     const isDarkMode = document.documentElement.classList.contains('dark')
     const currentMode = isDarkMode ? 'dark' : 'light'
     
     // Get custom colors for current theme and mode
     const customColors = colorOverrides[currentThemeId]?.[currentMode]
     
-    if (customColors) {
+    if (customColors && Object.keys(customColors).length > 0) {
       // Apply each custom color
       Object.entries(customColors).forEach(([key, value]) => {
         document.documentElement.style.setProperty(key, value)
       })
     }
-  }, [currentThemeId, mode, colorOverrides])
+  }, [currentThemeId, colorOverrides, isLoading])
   
   return <>{children}</>
 }

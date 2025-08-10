@@ -216,14 +216,6 @@ export function ThemeSelector() {
             </div>
           )}
         </div>
-        
-        
-        {/* Current theme info */}
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">
-            Current theme: <span className="font-medium">{themes.find(t => t.id === currentTheme)?.name || 'Unknown'}</span>
-          </p>
-        </div>
       </CardContent>
     </Card>
   )

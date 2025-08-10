@@ -18,8 +18,11 @@ import { useThemeCustomizations } from '@/hooks/useThemeCustomizations'
 import { useHasPremiumAccess } from '@/hooks/useThemeLicense'
 import { converter } from 'culori'
 import { getThemeById } from '@/config/themes'
+import { setTheme } from '@/utils/theme'
 import { cn } from '@/lib/utils'
 import { ThemeCreator } from './ThemeCreator'
+import { api } from '@/lib/api'
+import { toast } from 'sonner'
 
 // Color conversion utilities
 const parseOklch = (str: string) => {
@@ -99,7 +102,17 @@ const getColorLabel = (color: string) =>
   CHART_LABELS[color] || color.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
 // Components
-const ColorSlider = ({ label, value, onChange, min = 0, max = 1, step = 0.01, suffix = '' }: any) => (
+interface ColorSliderProps {
+  label: string
+  value: number
+  onChange: (values: number[]) => void
+  min?: number
+  max?: number
+  step?: number
+  suffix?: string
+}
+
+const ColorSlider = ({ label, value, onChange, min = 0, max = 1, step = 0.01, suffix = '' }: ColorSliderProps) => (
   <div className="space-y-1">
     <div className="flex justify-between">
       <Label className="text-xs">{label}</Label>
@@ -111,7 +124,15 @@ const ColorSlider = ({ label, value, onChange, min = 0, max = 1, step = 0.01, su
   </div>
 )
 
-const ColorInput = ({ value, onChange, placeholder, onCopy, copied }: any) => (
+interface ColorInputProps {
+  value: string
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
+  placeholder: string
+  onCopy: () => void
+  copied: boolean
+}
+
+const ColorInput = ({ value, onChange, placeholder, onCopy, copied }: ColorInputProps) => (
   <div className="flex items-center gap-2">
     <Input
       className="text-xs flex-1 font-mono h-8"
@@ -195,13 +216,16 @@ export function ColorCustomizer({
   const [displayValues, setDisplayValues] = useState(initialParsed)
   const [hasChanges, setHasChanges] = useState(false)
   
-  // Update values when active color changes
+  // Update values when switching to a different color (not when adjusting current color)
   useEffect(() => {
-    const parsed = parseOklch(currentColor)
+    // Get the color value directly in the effect to avoid dependency issues
+    const saved = colorOverrides[currentThemeId]?.[currentMode]?.[`--${activeColor}`]
+    const colorValue = saved || getComputedStyle(document.documentElement).getPropertyValue(`--${activeColor}`).trim() || 'oklch(0.5 0.1 0)'
+    const parsed = parseOklch(colorValue)
     valuesRef.current = parsed
     setDisplayValues(parsed)
     setHasChanges(false)
-  }, [currentColor, activeColor])
+  }, [activeColor, currentThemeId, currentMode, colorOverrides])
   
   const previewColor = useMemo(() => toHex(displayValues.l, displayValues.c, displayValues.h), [displayValues])
   
@@ -214,63 +238,93 @@ export function ColorCustomizer({
     document.documentElement.style.setProperty(`--${activeColor}`, color)
   }, [activeColor])
   
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!currentThemeId || !hasChanges) return
     
     const newColor = formatOklch(valuesRef.current.l, valuesRef.current.c, valuesRef.current.h)
-    const existingThemeOverrides = colorOverrides[currentThemeId] || { light: {}, dark: {} }
     
-    updateColors({
-      ...colorOverrides,
-      [currentThemeId]: {
-        light: existingThemeOverrides.light || {},
-        dark: existingThemeOverrides.dark || {},
-        [currentMode]: {
-          ...(existingThemeOverrides[currentMode] || {}),
-          [`--${activeColor}`]: newColor
-        }
+    // Fetch fresh data from the server to avoid overwriting with stale data
+    try {
+      const freshData = await api.getThemeCustomizations()
+      const freshOverrides = freshData.colorOverrides || {}
+      
+      // Ensure structure exists only for the mode we're updating
+      if (!freshOverrides[currentThemeId]) {
+        freshOverrides[currentThemeId] = {}
       }
-    })
-    setHasChanges(false)
-  }, [currentThemeId, currentMode, activeColor, colorOverrides, updateColors, hasChanges])
+      if (!freshOverrides[currentThemeId][currentMode]) {
+        freshOverrides[currentThemeId][currentMode] = {}
+      }
+      
+      // Update only the specific color in the specific mode
+      freshOverrides[currentThemeId][currentMode][`--${activeColor}`] = newColor
+      
+      // Save the customizations
+      updateColors(freshOverrides)
+      
+      // Re-apply the current theme to ensure customizations are applied
+      await setTheme(currentThemeId)
+      
+      setHasChanges(false)
+    } catch (error) {
+      console.error('Failed to fetch current customizations:', error)
+      toast.error('Failed to save customizations')
+    }
+  }, [currentThemeId, currentMode, activeColor, updateColors, hasChanges])
   
-  const handleReset = useCallback((resetAll = false) => {
+  const handleReset = useCallback(async (resetAll = false) => {
     if (!currentThemeId) return
     
     const theme = getThemeById(currentThemeId)
     if (!theme) return
     
-    const newOverrides = { ...colorOverrides }
-    
-    if (resetAll) {
-      delete newOverrides[currentThemeId]
-      const colors = currentMode === 'dark' ? theme.cssVars.dark : theme.cssVars.light
-      Object.entries(colors).forEach(([key, value]) => {
-        document.documentElement.style.setProperty(key, value)
-      })
-    } else {
-      if (newOverrides[currentThemeId]?.[currentMode]) {
-        delete newOverrides[currentThemeId][currentMode][`--${activeColor}`]
-        if (Object.keys(newOverrides[currentThemeId][currentMode]).length === 0) {
-          delete newOverrides[currentThemeId][currentMode]
-          if (Object.keys(newOverrides[currentThemeId]).length === 0) {
-            delete newOverrides[currentThemeId]
+    try {
+      // Fetch fresh data to avoid overwriting with stale data
+      const freshData = await api.getThemeCustomizations()
+      const freshOverrides = freshData.colorOverrides || {}
+      
+      if (resetAll) {
+        // Reset all colors for current theme
+        delete freshOverrides[currentThemeId]
+      } else {
+        // Reset only the current color in current mode
+        if (freshOverrides[currentThemeId]?.[currentMode]) {
+          delete freshOverrides[currentThemeId][currentMode][`--${activeColor}`]
+          
+          // Clean up empty objects
+          if (Object.keys(freshOverrides[currentThemeId][currentMode]).length === 0) {
+            delete freshOverrides[currentThemeId][currentMode]
+          }
+          if (freshOverrides[currentThemeId] && 
+              Object.keys(freshOverrides[currentThemeId]).length === 0) {
+            delete freshOverrides[currentThemeId]
           }
         }
       }
-      const originalColors = currentMode === 'dark' ? theme.cssVars.dark : theme.cssVars.light
-      const originalValue = originalColors[`--${activeColor}`]
-      if (originalValue) {
-        document.documentElement.style.setProperty(`--${activeColor}`, originalValue)
-        const parsed = parseOklch(originalValue)
-        valuesRef.current = parsed
-        setDisplayValues(parsed)
+      
+      // Save the updated overrides
+      updateColors(freshOverrides)
+      
+      // Re-apply the theme to reset colors
+      await setTheme(currentThemeId)
+      
+      // Update display values for the current color
+      if (!resetAll) {
+        const originalColors = currentMode === 'dark' ? theme.cssVars.dark : theme.cssVars.light
+        const originalValue = originalColors[`--${activeColor}`]
+        if (originalValue) {
+          const parsed = parseOklch(originalValue)
+          valuesRef.current = parsed
+          setDisplayValues(parsed)
+        }
       }
+      
+      setHasChanges(false)
+    } catch (error) {
+      console.error('Failed to reset customizations:', error)
+      toast.error('Failed to reset customizations')
     }
-    
-    updateColors(Object.keys(newOverrides).length === 0 ? {} : newOverrides)
-    setHasChanges(false)
-  }, [activeColor, currentThemeId, currentMode, colorOverrides, updateColors])
+  }, [activeColor, currentThemeId, currentMode, updateColors])
   
   const handleColorSwitch = useCallback((color: ColorKey) => {
     setActiveColor(color)
