@@ -204,9 +204,10 @@ const createColumns = (incognitoMode: boolean): ColumnDef<Torrent>[] => [
     header: 'Name',
     cell: ({ row }) => {
       const displayName = incognitoMode ? getLinuxIsoName(row.original.hash) : row.original.name
+      const safeName = displayName || row.original.name || 'Unknown'
       return (
-        <div className="truncate text-sm" title={displayName}>
-          {displayName}
+        <div className="truncate text-sm" title={safeName}>
+          {safeName}
         </div>
       )
     },
@@ -625,17 +626,28 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
       
       // Check if we should shrink the list when scrolling back up
       const firstItem = vRows.at(0);
-      if (firstItem && safeLoadedRows > 200) { // Only shrink if we have more than 200 items loaded
+      if (firstItem && safeLoadedRows > 300) { // Only shrink if we have more than 300 items loaded
         const now = Date.now();
-        // Debounce shrinking to once every 500ms to prevent excessive updates
-        if (now - lastShrinkTimeRef.current > 500) {
+        // Debounce shrinking to once every 1000ms to prevent excessive updates
+        if (now - lastShrinkTimeRef.current > 1000) {
           lastShrinkTimeRef.current = now;
           
-          // If the user has scrolled significantly back up, reduce the loaded count
-          // Keep a buffer of 300 items ahead of the current viewport
-          const targetLoadedRows = Math.max(200, firstItem.index + 300);
-          if (targetLoadedRows < safeLoadedRows - 100) { // Only shrink if significant difference
-            setLoadedRows(targetLoadedRows);
+          // More aggressive shrinking: if user is viewing early items, shrink significantly
+          const viewportTop = firstItem.index;
+          const viewportBottom = lastItem?.index || viewportTop;
+          
+          // If user has scrolled back to early items (first 500), reset to base load
+          if (viewportTop < 500) {
+            const targetLoadedRows = Math.max(200, viewportBottom + 100);
+            if (targetLoadedRows < safeLoadedRows - 200) { // Only shrink if significant difference
+              setLoadedRows(targetLoadedRows);
+            }
+          } else {
+            // For middle sections, keep a smaller buffer
+            const targetLoadedRows = Math.max(300, viewportBottom + 150);
+            if (targetLoadedRows < safeLoadedRows - 300) { // Only shrink if significant difference
+              setLoadedRows(targetLoadedRows);
+            }
           }
         }
       }
@@ -674,10 +686,13 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
         // Initial load
         return targetRows
       } else if (sortedTorrents.length < prev) {
-        // Data reduced, cap at new length
-        return sortedTorrents.length
+        // Data reduced significantly, reset to reasonable size
+        return Math.min(targetRows, sortedTorrents.length)
       } else if (prev < targetRows) {
         // Not enough rows loaded, load at least 100
+        return targetRows
+      } else if (prev > 1000 && targetRows <= 100) {
+        // If we had loaded way too many and now have few items, reset
         return targetRows
       }
       return prev
@@ -1588,7 +1603,16 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
               <>
                 {totalCount} torrent{totalCount !== 1 ? 's' : ''}
                 {safeLoadedRows < rows.length && ` • ${safeLoadedRows} loaded in viewport`}
-                {safeLoadedRows < rows.length && ' (scroll for more)'}
+                {safeLoadedRows < rows.length && safeLoadedRows < totalCount && ' (scroll for more)'}
+                {safeLoadedRows < totalCount && safeLoadedRows > 300 && (
+                  <button
+                    onClick={() => setLoadedRows(Math.min(200, totalCount))}
+                    className="ml-2 text-xs text-primary hover:underline"
+                    title="Reset to show fewer items for better performance"
+                  >
+                    reset view
+                  </button>
+                )}
                 {isLoadingMore && ' • Loading more from server...'}
               </>
             )}
