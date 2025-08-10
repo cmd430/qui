@@ -15,7 +15,7 @@ export function useColorState() {
   const [activeColor, setActiveColor] = useState('primary')
   const [hasChanges, setHasChanges] = useState(false)
   
-  const currentMode = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  const currentMode: 'light' | 'dark' = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   
   const getCurrentColor = useCallback((colorKey: string) => {
     const override = colorOverrides[currentThemeId]?.[currentMode]?.[colorKey]

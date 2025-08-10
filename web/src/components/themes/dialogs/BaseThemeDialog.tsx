@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import {
   Dialog,
   DialogContent,
