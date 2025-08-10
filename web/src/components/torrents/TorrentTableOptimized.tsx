@@ -37,14 +37,7 @@ const VIRTUAL_CONSTANTS = {
   OVERSCAN_SMALL: 20,
   OVERSCAN_LARGE: 5,
   LARGE_DATASET_THRESHOLD: 10000,
-  SHRINK_THRESHOLD: 1000,
-  EARLY_ITEMS_THRESHOLD: 1000,
-  SHRINK_BUFFER: 300,
-  SHRINK_MIN_DIFFERENCE: 500,
-  SHRINK_DEBOUNCE_MS: 2000,
-  RESET_VIEW_THRESHOLD: 500,
-  RESET_VIEW_BUFFER: 200,
-  RESET_VIEW_MIN_SIZE: 300,
+  // No more manual reset constants - fully automatic virtual table
 } as const
 
 // Search and UI constants
@@ -499,7 +492,6 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
   // Progressive loading state with async management
   const [loadedRows, setLoadedRows] = useState<number>(VIRTUAL_CONSTANTS.INITIAL_LOADED_ROWS)
   const [isLoadingMoreRows, setIsLoadingMoreRows] = useState(false)
-  const lastShrinkTimeRef = useRef(0)
   
   // Query client for invalidating queries
   const queryClient = useQueryClient()
@@ -692,32 +684,13 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
     onChange: (instance: any) => {
       const vRows = instance.getVirtualItems();
       
-      // Check if we need to load more first (no need to wait for debounce)
+      // Only load more as user scrolls - no manual shrinking
       const lastItem = vRows.at(-1);
       if (lastItem && lastItem.index >= safeLoadedRows - VIRTUAL_CONSTANTS.LOAD_MORE_THRESHOLD && safeLoadedRows < rows.length) {
         loadMore();
       }
       
-      // Check if we should shrink the list when scrolling back up
-      const firstItem = vRows.at(0);
-      if (firstItem && safeLoadedRows > VIRTUAL_CONSTANTS.SHRINK_THRESHOLD) {
-        const now = Date.now();
-        // Debounce shrinking to prevent excessive updates
-        if (now - lastShrinkTimeRef.current > VIRTUAL_CONSTANTS.SHRINK_DEBOUNCE_MS) {
-          lastShrinkTimeRef.current = now;
-          
-          const viewportTop = firstItem.index;
-          const viewportBottom = lastItem?.index || viewportTop;
-          
-          // Simple shrinking: if user is viewing early items, shrink significantly
-          if (viewportTop < VIRTUAL_CONSTANTS.EARLY_ITEMS_THRESHOLD) {
-            const targetLoadedRows = Math.max(VIRTUAL_CONSTANTS.RESET_VIEW_THRESHOLD, viewportBottom + VIRTUAL_CONSTANTS.SHRINK_BUFFER);
-            if (targetLoadedRows < safeLoadedRows - VIRTUAL_CONSTANTS.SHRINK_MIN_DIFFERENCE) {
-              setLoadedRows(targetLoadedRows);
-            }
-          }
-        }
-      }
+      // Virtual table should be fully automatic - no manual position jumping
     },
   })
   
@@ -775,7 +748,6 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
     const targetRows = Math.min(VIRTUAL_CONSTANTS.INITIAL_LOADED_ROWS, sortedTorrents.length || 0)
     setLoadedRows(targetRows)
     setIsLoadingMoreRows(false)
-    lastShrinkTimeRef.current = 0 // Reset debounce timer
     
     // Scroll to top and force virtualizer recalculation
     if (parentRef.current) {
@@ -1672,30 +1644,6 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
                 {totalCount} torrent{totalCount !== 1 ? 's' : ''}
                 {safeLoadedRows < totalCount && ` • ${safeLoadedRows} loaded in viewport`}
                 {safeLoadedRows < totalCount && ' (scroll for more)'}
-                {safeLoadedRows < totalCount && safeLoadedRows > VIRTUAL_CONSTANTS.RESET_VIEW_THRESHOLD && (
-                  <button
-                    onClick={() => {
-                      // Get current viewport position
-                      const vRows = virtualizer.getVirtualItems();
-                      const currentTop = vRows.length > 0 ? vRows[0].index : 0;
-                      
-                      // Reset to a smaller size but ensure current position stays visible
-                      const targetRows = Math.max(VIRTUAL_CONSTANTS.RESET_VIEW_MIN_SIZE, currentTop + VIRTUAL_CONSTANTS.RESET_VIEW_BUFFER);
-                      const newLoadedRows = Math.min(targetRows, totalCount);
-                      
-                      setLoadedRows(newLoadedRows);
-                      
-                      // Force virtualizer to update immediately
-                      setTimeout(() => {
-                        virtualizer.measure();
-                      }, UI_CONSTANTS.VIRTUALIZER_MEASURE_DELAY_MS);
-                    }}
-                    className="ml-2 text-xs text-primary hover:underline"
-                    title="Reduce loaded items while maintaining current position"
-                  >
-                    reset view
-                  </button>
-                )}
                 {isLoadingMore && ' • Loading more from server...'}
               </>
             )}
