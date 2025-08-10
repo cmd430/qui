@@ -424,6 +424,7 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
   // Progressive loading state with async management
   const [loadedRows, setLoadedRows] = useState(100)
   const [isLoadingMoreRows, setIsLoadingMoreRows] = useState(false)
+  const lastShrinkTimeRef = useRef(0)
   
   // Query client for invalidating queries
   const queryClient = useQueryClient()
@@ -613,13 +614,30 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
     // Provide a key to help with item tracking
     getItemKey: useCallback((index: number) => rows[index]?.id || `row-${index}`, [rows]),
     // Use a debounced onChange to prevent excessive rendering
-    onChange: (instance) => {
+    onChange: (instance: any) => {
       const vRows = instance.getVirtualItems();
       
       // Check if we need to load more first (no need to wait for debounce)
       const lastItem = vRows.at(-1);
       if (lastItem && lastItem.index >= safeLoadedRows - 50 && safeLoadedRows < rows.length) {
         loadMore();
+      }
+      
+      // Check if we should shrink the list when scrolling back up
+      const firstItem = vRows.at(0);
+      if (firstItem && safeLoadedRows > 200) { // Only shrink if we have more than 200 items loaded
+        const now = Date.now();
+        // Debounce shrinking to once every 500ms to prevent excessive updates
+        if (now - lastShrinkTimeRef.current > 500) {
+          lastShrinkTimeRef.current = now;
+          
+          // If the user has scrolled significantly back up, reduce the loaded count
+          // Keep a buffer of 300 items ahead of the current viewport
+          const targetLoadedRows = Math.max(200, firstItem.index + 300);
+          if (targetLoadedRows < safeLoadedRows - 100) { // Only shrink if significant difference
+            setLoadedRows(targetLoadedRows);
+          }
+        }
       }
     },
   })
@@ -674,6 +692,7 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
     const targetRows = Math.min(100, sortedTorrents.length || 0)
     setLoadedRows(targetRows)
     setIsLoadingMoreRows(false)
+    lastShrinkTimeRef.current = 0 // Reset debounce timer
     
     // Scroll to top and force virtualizer recalculation
     if (parentRef.current) {
