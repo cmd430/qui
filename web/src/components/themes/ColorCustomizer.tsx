@@ -21,7 +21,12 @@ export function ColorCustomizer({
   if (!isLicenseLoading && !hasPremiumAccess) return null
   
   if (mode === 'dialog') {
-    return <ColorCustomizerDialog open={open!} onOpenChange={onOpenChange!} />
+    // Dialog mode requires both props
+    if (open === undefined || onOpenChange === undefined) {
+      console.warn('ColorCustomizer: dialog mode requires open and onOpenChange props')
+      return null
+    }
+    return <ColorCustomizerDialog open={open} onOpenChange={onOpenChange} />
   }
   
   return <ColorCustomizerPopover open={open} onOpenChange={onOpenChange} />

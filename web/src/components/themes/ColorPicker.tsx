@@ -97,12 +97,14 @@ export function ColorPicker({
           value={parsedColor.l} 
           onChange={(v) => updateColorValue(v[0], parsedColor.c, parsedColor.h)}
           {...COLOR_LIMITS.lightness}
+          precision={2}
         />
         <ColorSlider 
           label="Chroma (Saturation)" 
           value={parsedColor.c} 
           onChange={(v) => updateColorValue(parsedColor.l, v[0], parsedColor.h)}
           {...COLOR_LIMITS.chroma}
+          precision={3}
         />
         <ColorSlider 
           label="Hue" 
@@ -110,6 +112,7 @@ export function ColorPicker({
           onChange={(v) => updateColorValue(parsedColor.l, parsedColor.c, v[0])}
           {...COLOR_LIMITS.hue}
           suffix="°"
+          precision={0}
         />
       </div>
       

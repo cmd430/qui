@@ -14,6 +14,7 @@ interface ColorSliderProps {
   max?: number
   step?: number
   suffix?: string
+  precision?: number
 }
 
 export function ColorSlider({ 
@@ -23,16 +24,10 @@ export function ColorSlider({
   min = 0, 
   max = 1, 
   step = 0.01, 
-  suffix = '' 
+  suffix = '',
+  precision = 2
 }: ColorSliderProps) {
-  let displayValue: string
-  if (label === 'Hue') {
-    displayValue = value.toFixed(0)
-  } else if (label === 'Lightness') {
-    displayValue = value.toFixed(2)
-  } else {
-    displayValue = value.toFixed(3)
-  }
+  const displayValue = value.toFixed(precision)
       
   return (
     <div className="space-y-1">
@@ -47,7 +42,7 @@ export function ColorSlider({
         onValueChange={onChange} 
         min={min} 
         max={max} 
-        step={step} 
+        step={step}
       />
     </div>
   )
