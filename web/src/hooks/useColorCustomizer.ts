@@ -11,50 +11,55 @@ import { toast } from 'sonner'
 import { parseOklch, formatOklch } from '@/utils/colors'
 import { getThemeById } from '@/config/themes'
 import { COPY_FEEDBACK_DURATION } from '@/constants/timings'
+import { DEFAULT_COLOR } from '@/constants/colors'
 
 // Type for theme color overrides structure
 type ColorOverrides = Record<string, Record<string, Record<string, string>>>
 
 export function useColorCustomizer() {
-  const { theme: currentThemeId } = useTheme()
+  const { theme: currentThemeId, mode: themeMode } = useTheme()
   const { colorOverrides: savedOverrides, updateColors } = useThemeCustomizations()
   const [activeColor, setActiveColor] = useState('primary')
   const [hasChanges, setHasChanges] = useState(false)
   const [copiedValue, setCopiedValue] = useState<string | null>(null)
-  const [currentMode, setCurrentMode] = useState<'light' | 'dark'>('light')
-  const [colorValues, setColorValues] = useState<Record<string, string>>({})
+  const [editedColors, setEditedColors] = useState<Record<string, string>>({})
   
-  // Initialize mode and colors from DOM after mount
+  // Determine current mode from document
+  const currentMode = useMemo(() => {
+    // Use themeMode from useTheme, or fallback to checking DOM
+    if (themeMode && themeMode !== 'auto') {
+      return themeMode as 'light' | 'dark'
+    }
+    return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  }, [themeMode])
+  
+  // Get base colors from theme configuration
+  const baseColors = useMemo(() => {
+    const theme = getThemeById(currentThemeId)
+    if (!theme) return {}
+    
+    const themeColors = currentMode === 'dark' ? theme.cssVars.dark : theme.cssVars.light
+    const overrides = savedOverrides[currentThemeId]?.[currentMode] || {}
+    
+    // Merge base theme colors with saved overrides
+    return { ...themeColors, ...overrides }
+  }, [currentThemeId, currentMode, savedOverrides])
+  
+  // Combine base colors with current edits
+  const colorValues = useMemo(() => {
+    return { ...baseColors, ...editedColors }
+  }, [baseColors, editedColors])
+  
+  // Clear edited colors when theme changes
   useEffect(() => {
-    // Read mode from DOM
-    const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
-    setCurrentMode(mode)
-    
-    // Read all color values from DOM
-    const allColors: Record<string, string> = {}
-    const colorVars = [
-      '--primary', '--secondary', '--destructive', '--muted', '--accent', '--popover',
-      '--card', '--primary-foreground', '--secondary-foreground', '--destructive-foreground',
-      '--muted-foreground', '--accent-foreground', '--popover-foreground', '--card-foreground',
-      '--background', '--foreground', '--border', '--input', '--ring', '--radius',
-      '--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5',
-      '--success', '--warning', '--error', '--info'
-    ]
-    
-    colorVars.forEach(cssVar => {
-      const value = getComputedStyle(document.documentElement).getPropertyValue(cssVar).trim()
-      if (value) {
-        allColors[cssVar] = value
-      }
-    })
-    
-    setColorValues(allColors)
-  }, [])
+    setEditedColors({})
+    setHasChanges(false)
+  }, [currentThemeId, currentMode])
   
-  // Get current color value from state
+  // Get current color value
   const currentColorValue = useMemo(() => {
     const key = `--${activeColor}`
-    return colorValues[key] || 'oklch(0.5 0.1 0)'
+    return colorValues[key] || DEFAULT_COLOR
   }, [activeColor, colorValues])
   
   const parsedColor = parseOklch(currentColorValue)
@@ -68,10 +73,10 @@ export function useColorCustomizer() {
     const color = formatOklch(l, c, h)
     const key = `--${activeColor}`
     
-    // Update state (for slider position)
-    setColorValues(prev => ({ ...prev, [key]: color }))
+    // Update edited colors
+    setEditedColors(prev => ({ ...prev, [key]: color }))
     
-    // Update DOM (for visual preview)
+    // Update DOM for visual preview
     document.documentElement.style.setProperty(key, color)
     setHasChanges(true)
   }, [activeColor])
@@ -89,8 +94,9 @@ export function useColorCustomizer() {
         updatedOverrides[currentThemeId][currentMode] = {}
       }
       
-      // Save all edited colors
-      Object.entries(colorValues).forEach(([key, value]) => {
+      // Save all edited colors (merge with existing overrides)
+      const existingOverrides = savedOverrides[currentThemeId]?.[currentMode] || {}
+      Object.entries({ ...existingOverrides, ...editedColors }).forEach(([key, value]) => {
         updatedOverrides[currentThemeId][currentMode][key] = value
       })
       
@@ -142,11 +148,11 @@ export function useColorCustomizer() {
         document.documentElement.style.setProperty(key, value as string)
       })
       
-      // Update local state
+      // Clear edited colors (will cause re-render with base theme colors)
       if (resetAll) {
-        setColorValues({})
+        setEditedColors({})
       } else {
-        setColorValues(prev => {
+        setEditedColors(prev => {
           const next = { ...prev }
           delete next[`--${activeColor}`]
           return next

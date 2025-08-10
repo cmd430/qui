@@ -49,3 +49,11 @@ export const COLOR_LIMITS = {
 
 // Default color fallback
 export const DEFAULT_COLOR = 'oklch(0.5 0.1 0)'
+
+// Get all color CSS variable names
+export function getAllColorVars(): string[] {
+  const allColors = Object.values(COLOR_CATEGORIES).flatMap(cat => cat.colors)
+  // Add additional status colors not in categories
+  allColors.push('success', 'warning', 'error', 'info', 'radius')
+  return allColors.map(color => `--${color}`)
+}
