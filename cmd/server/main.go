@@ -177,18 +177,38 @@ func runServer() {
 		handler = router
 	}
 
-	// Create HTTP server
+	// Create HTTP server with configurable timeouts
+	readTimeout := time.Duration(cfg.Config.HTTPTimeouts.ReadTimeout) * time.Second
+	writeTimeout := time.Duration(cfg.Config.HTTPTimeouts.WriteTimeout) * time.Second
+	idleTimeout := time.Duration(cfg.Config.HTTPTimeouts.IdleTimeout) * time.Second
+	
+	// Use defaults if not configured
+	if readTimeout == 0 {
+		readTimeout = 60 * time.Second
+	}
+	if writeTimeout == 0 {
+		writeTimeout = 120 * time.Second
+	}
+	if idleTimeout == 0 {
+		idleTimeout = 180 * time.Second
+	}
+	
 	srv := &http.Server{
 		Addr:         fmt.Sprintf("%s:%d", cfg.Config.Host, cfg.Config.Port),
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		IdleTimeout:  idleTimeout,
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Info().Str("address", srv.Addr).Msg("Starting HTTP server")
+		log.Info().
+			Str("address", srv.Addr).
+			Dur("readTimeout", readTimeout).
+			Dur("writeTimeout", writeTimeout).
+			Dur("idleTimeout", idleTimeout).
+			Msg("Starting HTTP server")
 		if cfg.Config.BaseURL != "" {
 			log.Info().Str("baseURL", cfg.Config.BaseURL).Msg("Serving under base URL")
 		}

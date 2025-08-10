@@ -67,6 +67,11 @@ func (c *AppConfig) defaults() {
 	c.viper.SetDefault("sessionSecret", sessionSecret)
 	c.viper.SetDefault("logLevel", "INFO")
 	c.viper.SetDefault("logPath", "")
+	
+	// HTTP timeout defaults - increased for large qBittorrent instances
+	c.viper.SetDefault("httpTimeouts.readTimeout", 60)   // 60 seconds
+	c.viper.SetDefault("httpTimeouts.writeTimeout", 120) // 120 seconds for large responses
+	c.viper.SetDefault("httpTimeouts.idleTimeout", 180)  // 180 seconds
 }
 
 func (c *AppConfig) load(configPath string) error {
@@ -149,6 +154,11 @@ func (c *AppConfig) loadFromEnv() {
 	c.viper.BindEnv("sessionSecret", "QUI__SESSION_SECRET")
 	c.viper.BindEnv("logLevel", "QUI__LOG_LEVEL")
 	c.viper.BindEnv("logPath", "QUI__LOG_PATH")
+	
+	// HTTP timeout environment variables
+	c.viper.BindEnv("httpTimeouts.readTimeout", "QUI__HTTP_READ_TIMEOUT")
+	c.viper.BindEnv("httpTimeouts.writeTimeout", "QUI__HTTP_WRITE_TIMEOUT")
+	c.viper.BindEnv("httpTimeouts.idleTimeout", "QUI__HTTP_IDLE_TIMEOUT")
 }
 
 func (c *AppConfig) watchConfig() {
@@ -223,6 +233,21 @@ sessionSecret = "{{ .sessionSecret }}"
 # Default: "INFO"
 # Options: "ERROR", "DEBUG", "INFO", "WARN", "TRACE"
 logLevel = "{{ .logLevel }}"
+
+# HTTP Timeouts (for large qBittorrent instances)
+# Increase these values if you experience timeouts with 10k+ torrents
+[httpTimeouts]
+# Read timeout in seconds
+# Default: 60
+#readTimeout = 60
+
+# Write timeout in seconds (increase for large responses)
+# Default: 120
+#writeTimeout = 120
+
+# Idle timeout in seconds
+# Default: 180
+#idleTimeout = 180
 `
 
 	// Prepare template data

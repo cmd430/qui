@@ -12,6 +12,8 @@ interface UseTorrentsListOptions {
     tags: string[]
     trackers: string[]
   }
+  sort?: string
+  order?: 'asc' | 'desc'
 }
 
 // Simplified hook that trusts the backend's stale-while-revalidate pattern
@@ -20,12 +22,13 @@ export function useTorrentsList(
   instanceId: number,
   options: UseTorrentsListOptions = {}
 ) {
-  const { enabled = true, search, filters } = options
+  const { enabled = true, search, filters, sort = 'added_on', order = 'desc' } = options
   
   const [currentPage, setCurrentPage] = useState(0)
   const [allTorrents, setAllTorrents] = useState<Torrent[]>([])
   const [hasLoadedAll, setHasLoadedAll] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [lastKnownTotal, setLastKnownTotal] = useState(0)
   const pageSize = 500 // Load 500 at a time (backend default)
   
   const [serverState, setServerState] = useState<ServerState | null>(null)
@@ -61,21 +64,22 @@ export function useTorrentsList(
     }
   }, [syncData])
   
-  // Reset state when instanceId, filters, or search change
+  // Reset state when instanceId, filters, search, or sort changes
   useEffect(() => {
     setCurrentPage(0)
     setAllTorrents([])
     setHasLoadedAll(false)
-  }, [instanceId, filters, search])
+    setLastKnownTotal(0)
+  }, [instanceId, filters, search, sort, order])
   
   // Query for torrents - backend handles stale-while-revalidate
   const { data, isLoading, isFetching } = useQuery<TorrentResponse>({
-    queryKey: ['torrents-list', instanceId, currentPage, filters, search],
+    queryKey: ['torrents-list', instanceId, currentPage, filters, search, sort, order],
     queryFn: () => api.getTorrents(instanceId, { 
       page: currentPage, 
       limit: pageSize,
-      sort: 'addedOn',
-      order: 'desc',
+      sort,
+      order,
       search,
       filters
     }),
@@ -90,6 +94,11 @@ export function useTorrentsList(
   // Update torrents when data arrives
   useEffect(() => {
     if (data?.torrents) {
+      // Update last known total whenever we get data
+      if (data.total !== undefined) {
+        setLastKnownTotal(data.total)
+      }
+      
       if (currentPage === 0) {
         // First page, replace all
         setAllTorrents(data.torrents)
@@ -153,9 +162,12 @@ export function useTorrentsList(
   const isCachedData = data?.cacheMetadata?.source === 'cache'
   const isStaleData = data?.cacheMetadata?.isStale === true
   
+  // Use lastKnownTotal when loading more pages to prevent flickering
+  const effectiveTotalCount = currentPage > 0 && !data?.total ? lastKnownTotal : (data?.total ?? 0)
+  
   return {
     torrents: allTorrents,
-    totalCount: data?.total ?? 0,
+    totalCount: effectiveTotalCount,
     stats,
     counts: data?.counts, // Return counts from backend
     categories: data?.categories, // Return categories from backend
