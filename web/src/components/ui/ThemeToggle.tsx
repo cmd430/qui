@@ -1,3 +1,8 @@
+/*
+ * Copyright (c) 2025, s0up and the autobrr contributors.
+ * SPDX-License-Identifier: MIT
+ */
+
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { getCurrentThemeMode, getCurrentTheme, setTheme, setThemeMode, type ThemeMode } from "@/utils/theme";
 import { getAllThemes, isThemePremium, isThemeCustom, refreshThemesList } from "@/config/themes";
