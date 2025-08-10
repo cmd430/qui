@@ -497,7 +497,7 @@ export const TorrentTableOptimized = memo(function TorrentTableOptimized({ insta
   const [columnSizing, setColumnSizing] = usePersistedColumnSizing(DEFAULT_COLUMN_SIZING)
   
   // Progressive loading state with async management
-  const [loadedRows, setLoadedRows] = useState(VIRTUAL_CONSTANTS.INITIAL_LOADED_ROWS)
+  const [loadedRows, setLoadedRows] = useState<number>(VIRTUAL_CONSTANTS.INITIAL_LOADED_ROWS)
   const [isLoadingMoreRows, setIsLoadingMoreRows] = useState(false)
   const lastShrinkTimeRef = useRef(0)
   
