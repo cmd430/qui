@@ -2,12 +2,10 @@
 
 set -euo pipefail
 
-# Configuration - Change these to update license headers
 COPYRIGHT_HOLDER="s0up and the autobrr contributors"
 COPYRIGHT_YEAR="2025"
-LICENSE="GPL-2.0-or-later"  # Change this to MIT, Apache-2.0, etc.
+LICENSE="GPL-2.0"
 
-# Define exact headers for each file type
 TS_HEADER="/*
  * Copyright (c) ${COPYRIGHT_YEAR}, ${COPYRIGHT_HOLDER}.
  * SPDX-License-Identifier: ${LICENSE}
@@ -16,7 +14,6 @@ TS_HEADER="/*
 GO_HEADER="// Copyright (c) ${COPYRIGHT_YEAR}, ${COPYRIGHT_HOLDER}.
 // SPDX-License-Identifier: ${LICENSE}"
 
-# Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
