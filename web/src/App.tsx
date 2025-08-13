@@ -9,8 +9,6 @@ import { router } from './router'
 import { ThemeProvider } from '@/components/themes/ThemeProvider'
 import { ThemeCustomizationProvider } from '@/components/themes/ThemeCustomizationProvider'
 import { Toaster } from '@/components/ui/sonner'
-import { InstallPrompt } from '@/components/pwa/InstallPrompt'
-import { IOSInstallPrompt } from '@/components/pwa/IOSInstallPrompt'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,8 +26,6 @@ function App() {
         <ThemeCustomizationProvider>
           <RouterProvider router={router} />
           <Toaster />
-          <InstallPrompt />
-          <IOSInstallPrompt />
         </ThemeCustomizationProvider>
       </ThemeProvider>
     </QueryClientProvider>

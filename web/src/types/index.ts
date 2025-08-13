@@ -39,6 +39,11 @@ export interface Instance {
   updatedAt: string
 }
 
+export interface InstanceResponse extends Instance {
+  connected: boolean
+  connectionError?: string
+}
+
 export interface Torrent {
   hash: string
   name: string
