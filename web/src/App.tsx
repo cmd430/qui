@@ -9,6 +9,7 @@ import { router } from './router'
 import { ThemeProvider } from '@/components/themes/ThemeProvider'
 import { ThemeCustomizationProvider } from '@/components/themes/ThemeCustomizationProvider'
 import { Toaster } from '@/components/ui/sonner'
+import { ThemeValidator } from '@/components/themes/ThemeValidator'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,8 +24,9 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
+      <ThemeValidator />
         <ThemeCustomizationProvider>
-          <RouterProvider router={router} />
+      <RouterProvider router={router} />
           <Toaster />
         </ThemeCustomizationProvider>
       </ThemeProvider>

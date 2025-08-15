@@ -32,8 +32,6 @@ export const useValidateThemeLicense = () => {
         toast.success(message)
         // Invalidate theme license queries to refresh the UI
         queryClient.invalidateQueries({ queryKey: ['theme-licenses'] })
-      } else {
-        toast.error(data.error || 'Invalid license key')
       }
     },
     onError: (error: Error) => {
