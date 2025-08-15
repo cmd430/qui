@@ -126,8 +126,9 @@ export function ThemeSelector() {
     return hasPremiumAccess // Premium themes require premium access
   }
   
-  const freeThemes = themes.filter(theme => !theme.isPremium)
-  const premiumThemes = themes.filter(theme => theme.isPremium)
+  // Filter themes by category - custom themes are handled separately
+  const freeThemes = themes.filter(theme => !theme.isPremium && !theme.isCustom)
+  const premiumThemes = themes.filter(theme => theme.isPremium && !theme.isCustom)
   
   const handleThemeSelect = (themeId: string) => {
     if (isThemeLicensed(themeId)) {

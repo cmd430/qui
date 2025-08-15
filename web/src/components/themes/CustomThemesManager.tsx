@@ -48,10 +48,12 @@ export function CustomThemesManager() {
   
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteCustomTheme(id),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success('Theme deleted successfully')
       queryClient.invalidateQueries({ queryKey: ['custom-themes'] })
-      refreshThemesList()
+      await refreshThemesList()
+      // Trigger theme validation refresh
+      queryClient.invalidateQueries({ queryKey: ['theme-licenses'] })
       setDeleteThemeId(null)
     },
     onError: () => {
@@ -61,10 +63,12 @@ export function CustomThemesManager() {
   
   const duplicateMutation = useMutation({
     mutationFn: (id: number) => api.duplicateCustomTheme(id),
-    onSuccess: (newTheme) => {
+    onSuccess: async (newTheme) => {
       toast.success(`Created "${newTheme.name}"`)
       queryClient.invalidateQueries({ queryKey: ['custom-themes'] })
-      refreshThemesList()
+      await refreshThemesList()
+      // Trigger theme validation refresh
+      queryClient.invalidateQueries({ queryKey: ['theme-licenses'] })
     },
     onError: () => {
       toast.error('Failed to duplicate theme')
@@ -81,10 +85,12 @@ export function CustomThemesManager() {
     }) => {
       return api.importCustomTheme(themeData)
     },
-    onSuccess: (theme) => {
+    onSuccess: async (theme) => {
       toast.success(`Imported "${theme.name}"`)
       queryClient.invalidateQueries({ queryKey: ['custom-themes'] })
-      refreshThemesList()
+      await refreshThemesList()
+      // Trigger theme validation refresh
+      queryClient.invalidateQueries({ queryKey: ['theme-licenses'] })
       setShowImportDialog(false)
     },
     onError: (error: unknown) => {
@@ -171,7 +177,7 @@ export function CustomThemesManager() {
                   <h4 className="font-medium mb-3 flex items-center gap-2">
                     <Badge variant="secondary" className="text-xs">
                       <Sparkles className="h-3 w-3 mr-1" />
-                      Custom
+                      Premium
                     </Badge>
                     Custom Themes
                   </h4>

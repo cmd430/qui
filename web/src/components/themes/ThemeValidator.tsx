@@ -5,7 +5,7 @@
 
 import { useEffect } from 'react'
 import { useLicensedThemes } from '@/hooks/useThemeLicense'
-import { themes, isThemePremium, getDefaultTheme } from '@/config/themes'
+import { themes, isThemePremium, isThemeCustom, getDefaultTheme } from '@/config/themes'
 import { setValidatedThemes, setTheme } from '@/utils/theme'
 
 /**
@@ -36,9 +36,12 @@ export function ThemeValidator() {
     const accessibleThemes: string[] = []
     
     themes.forEach(theme => {
-      if (!isThemePremium(theme.id)) {
+      // Free themes are always accessible
+      if (!isThemePremium(theme.id) && !isThemeCustom(theme.id)) {
         accessibleThemes.push(theme.id)
-      } else if (data?.hasPremiumAccess) {
+      } 
+      // Premium and custom themes require premium access
+      else if (data?.hasPremiumAccess) {
         accessibleThemes.push(theme.id)
       }
     })
@@ -50,10 +53,10 @@ export function ThemeValidator() {
     const validateCurrentTheme = () => {
       const storedThemeId = localStorage.getItem('color-theme')
       
-      // Only reset if the stored theme is premium and user doesn't have access
+      // Only reset if the stored theme is premium/custom and user doesn't have access
       // This ensures we don't unnecessarily reset the theme
-      if (storedThemeId && isThemePremium(storedThemeId) && !data?.hasPremiumAccess) {
-        console.log('Premium theme detected without access, reverting to default')
+      if (storedThemeId && (isThemePremium(storedThemeId) || isThemeCustom(storedThemeId)) && !data?.hasPremiumAccess) {
+        console.log('Premium/custom theme detected without access, reverting to default')
         setTheme(getDefaultTheme().id)
       }
     }
@@ -69,8 +72,8 @@ export function ThemeValidator() {
     const validateStoredTheme = () => {
       const storedThemeId = localStorage.getItem('color-theme')
       // Only validate and reset if we have confirmed the user doesn't have access
-      if (storedThemeId && isThemePremium(storedThemeId) && data?.hasPremiumAccess === false) {
-        console.log('Periodic validation: Premium theme without access detected')
+      if (storedThemeId && (isThemePremium(storedThemeId) || isThemeCustom(storedThemeId)) && data?.hasPremiumAccess === false) {
+        console.log('Periodic validation: Premium/custom theme without access detected')
         localStorage.removeItem('color-theme')
         setTheme(getDefaultTheme().id)
       }
@@ -80,8 +83,8 @@ export function ThemeValidator() {
 
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'color-theme' && e.newValue) {
-        // Only validate if the new value is a premium theme and user doesn't have access
-        if (isThemePremium(e.newValue) && data?.hasPremiumAccess === false) {
+        // Only validate if the new value is a premium/custom theme and user doesn't have access
+        if ((isThemePremium(e.newValue) || isThemeCustom(e.newValue)) && data?.hasPremiumAccess === false) {
           validateStoredTheme()
         }
       }

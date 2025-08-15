@@ -23,7 +23,8 @@ export interface Theme {
 const builtInThemes: Theme[] = loadThemes();
 
 // Store for all themes (built-in + custom)
-let allThemes: Theme[] = [...builtInThemes];
+// This array is modified in-place to ensure all references stay valid
+export const themes: Theme[] = [...builtInThemes];
 
 // Load custom themes from API and merge with built-in themes
 export async function loadCustomThemes(): Promise<void> {
@@ -44,11 +45,15 @@ export async function loadCustomThemes(): Promise<void> {
       },
     }));
     
-    // Merge with built-in themes
-    allThemes = [...builtInThemes, ...convertedThemes];
+    // Remove existing custom themes first
+    const builtInOnly = themes.filter(t => !t.isCustom);
+    
+    // Clear the array and repopulate it in-place
+    themes.length = 0;
+    themes.push(...builtInOnly, ...convertedThemes);
     
     // Sort themes: minimal first, then built-in, then custom
-    allThemes.sort((a, b) => {
+    themes.sort((a, b) => {
       if (a.id === 'minimal') return -1;
       if (b.id === 'minimal') return 1;
       if (!a.isCustom && b.isCustom) return -1;
@@ -61,16 +66,13 @@ export async function loadCustomThemes(): Promise<void> {
   }
 }
 
-// Export mutable themes array
-export const themes: Theme[] = allThemes;
-
 // Helper functions
 export function getThemeById(id: string): Theme | undefined {
-  return allThemes.find(theme => theme.id === id);
+  return themes.find(theme => theme.id === id);
 }
 
 export function getDefaultTheme(): Theme {
-  return allThemes.find(theme => theme.id === 'minimal') || allThemes[0];
+  return themes.find(theme => theme.id === 'minimal') || themes[0];
 }
 
 export function isThemePremium(themeId: string): boolean {
@@ -84,12 +86,12 @@ export function isThemeCustom(themeId: string): boolean {
 }
 
 export function getAllThemes(): Theme[] {
-  return allThemes;
+  return themes;
 }
 
-export function refreshThemesList(): void {
+export async function refreshThemesList(): Promise<void> {
   // Reload custom themes
-  loadCustomThemes();
+  await loadCustomThemes();
 }
 
 export { themes as default };
