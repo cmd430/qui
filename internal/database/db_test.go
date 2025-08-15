@@ -6,6 +6,7 @@ package database
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,18 @@ import (
 )
 
 func TestMigrationIdempotency(t *testing.T) {
+	// Count actual migration files
+	migrationsDir := filepath.Join("migrations")
+	entries, err := os.ReadDir(migrationsDir)
+	require.NoError(t, err, "Failed to read migrations directory")
+	
+	expectedMigrations := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+			expectedMigrations++
+		}
+	}
+	
 	// Create temp directory for test database
 	tmpDir, err := os.MkdirTemp("", "qui-test-idempotent-*")
 	require.NoError(t, err)
@@ -41,6 +54,6 @@ func TestMigrationIdempotency(t *testing.T) {
 	require.NoError(t, err, "Failed to count migrations")
 
 	assert.Equal(t, count1, count2, "Migration count should be the same after re-initialization")
-	assert.Equal(t, 3, count2, "Should have exactly 3 migrations applied")
+	assert.Equal(t, expectedMigrations, count2, "Applied migrations should match the number of .sql files in migrations directory")
 }
 
