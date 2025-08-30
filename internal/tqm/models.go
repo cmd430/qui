@@ -147,3 +147,148 @@ var CommonExpressions = map[string]string{
 	"SmallTorrent":   "Size <= 100*1024*1024",     // 100MB
 	"LargeTorrent":   "Size >= 10*1024*1024*1024", // 10GB
 }
+
+// FilterTemplate represents a predefined filter template
+type FilterTemplate struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Expression  string `json:"expression"`
+	Category    string `json:"category"`
+	Mode        string `json:"mode"`
+	UploadKB    *int   `json:"uploadKb,omitempty"`
+}
+
+// FilterRequest represents a request to create or update a filter
+type FilterRequest struct {
+	Name       string `json:"name"`
+	Mode       string `json:"mode"` // "add", "remove", "full"
+	Expression string `json:"expression"`
+	UploadKB   *int   `json:"uploadKb,omitempty"`
+	Enabled    bool   `json:"enabled"`
+}
+
+// ExpressionValidationRequest represents a request to validate an expression
+type ExpressionValidationRequest struct {
+	Expression string `json:"expression"`
+}
+
+// ExpressionValidationResult represents the result of expression validation
+type ExpressionValidationResult struct {
+	Valid  bool     `json:"valid"`
+	Error  string   `json:"error,omitempty"`
+	Fields []string `json:"fields,omitempty"` // Fields referenced in the expression
+}
+
+// ExpressionTestRequest represents a request to test an expression
+type ExpressionTestRequest struct {
+	Expression string `json:"expression"`
+	Limit      int    `json:"limit,omitempty"` // Max torrents to test against
+}
+
+// ExpressionTestResult represents the result of testing an expression
+type ExpressionTestResult struct {
+	TorrentHash string `json:"torrentHash"`
+	TorrentName string `json:"torrentName"`
+	Matched     bool   `json:"matched"`
+	Error       string `json:"error,omitempty"`
+	EvaluatedTo any    `json:"evaluatedTo,omitempty"` // The actual result of the expression
+}
+
+// ExpressionTestResponse represents the full response from testing an expression
+type ExpressionTestResponse struct {
+	Results      []ExpressionTestResult `json:"results"`
+	TotalTested  int                    `json:"totalTested"`
+	MatchedCount int                    `json:"matchedCount"`
+	ErrorCount   int                    `json:"errorCount"`
+}
+
+// Predefined filter templates
+var FilterTemplates = []FilterTemplate{
+	{
+		ID:          "unregistered",
+		Name:        "Unregistered Torrents",
+		Description: "Mark torrents that are no longer registered with their tracker",
+		Expression:  "IsUnregistered()",
+		Category:    "tracker",
+		Mode:        "full",
+	},
+	{
+		ID:          "tracker-down",
+		Name:        "Tracker Down",
+		Description: "Mark torrents with unreachable trackers",
+		Expression:  "IsTrackerDown()",
+		Category:    "tracker",
+		Mode:        "full",
+	},
+	{
+		ID:          "low-seeds",
+		Name:        "Low Seed Count",
+		Description: "Tag torrents with 3 or fewer seeds",
+		Expression:  "Seeds <= 3 && !IsUnregistered()",
+		Category:    "seeding",
+		Mode:        "full",
+	},
+	{
+		ID:          "high-ratio",
+		Name:        "High Ratio Seeding",
+		Description: "Tag torrents with ratio above 2.0 that have been seeding for at least a week",
+		Expression:  "Ratio >= 2.0 && SeedingDays >= 7",
+		Category:    "ratio",
+		Mode:        "full",
+	},
+	{
+		ID:          "old-torrents",
+		Name:        "Old Torrents",
+		Description: "Tag torrents that have been seeding for over 30 days",
+		Expression:  "SeedingDays >= 30",
+		Category:    "age",
+		Mode:        "full",
+	},
+	{
+		ID:          "small-torrents",
+		Name:        "Small Torrents",
+		Description: "Tag torrents smaller than 100MB",
+		Expression:  "Size <= 100*1024*1024",
+		Category:    "size",
+		Mode:        "full",
+	},
+	{
+		ID:          "large-torrents",
+		Name:        "Large Torrents",
+		Description: "Tag torrents larger than 10GB",
+		Expression:  "Size >= 10*1024*1024*1024",
+		Category:    "size",
+		Mode:        "full",
+	},
+	{
+		ID:          "slow-upload",
+		Name:        "Limit Upload Speed",
+		Description: "Apply upload speed limit to torrents with high ratio",
+		Expression:  "Ratio >= 3.0",
+		Category:    "bandwidth",
+		Mode:        "full",
+		UploadKB:    intPtr(100), // 100 KB/s limit
+	},
+	{
+		ID:          "stalled-downloading",
+		Name:        "Stalled Downloads",
+		Description: "Tag downloading torrents that are stalled",
+		Expression:  `State == "stalledDL"`,
+		Category:    "state",
+		Mode:        "full",
+	},
+	{
+		ID:          "completed-today",
+		Name:        "Recently Completed",
+		Description: "Tag torrents completed in the last 24 hours",
+		Expression:  "CompletedDays < 1",
+		Category:    "recent",
+		Mode:        "add",
+	},
+}
+
+// Helper function to create int pointer
+func intPtr(i int) *int {
+	return &i
+}

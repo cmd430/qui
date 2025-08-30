@@ -192,3 +192,237 @@ func (h *TQMHandler) GetTQMStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// GetFilterTemplates returns predefined filter templates
+// GET /api/instances/{instanceID}/tqm/templates
+func (h *TQMHandler) GetFilterTemplates(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.ParseInt(chi.URLParam(r, "instanceID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid instance ID")
+		http.Error(w, "Invalid instance ID", http.StatusBadRequest)
+		return
+	}
+
+	templates, err := h.tqmManager.GetFilterTemplates(r.Context())
+	if err != nil {
+		log.Error().Err(err).Int64("instanceID", instanceID).Msg("Failed to get filter templates")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(templates); err != nil {
+		log.Error().Err(err).Msg("Failed to encode templates response")
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// ValidateExpression validates a TQM expression
+// POST /api/instances/{instanceID}/tqm/validate
+func (h *TQMHandler) ValidateExpression(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.ParseInt(chi.URLParam(r, "instanceID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid instance ID")
+		http.Error(w, "Invalid instance ID", http.StatusBadRequest)
+		return
+	}
+
+	var req tqm.ExpressionValidationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode expression validation request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Expression == "" {
+		http.Error(w, "Expression is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.tqmManager.ValidateExpression(r.Context(), req.Expression)
+	if err != nil {
+		log.Error().Err(err).Int64("instanceID", instanceID).Str("expression", req.Expression).Msg("Failed to validate expression")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Error().Err(err).Msg("Failed to encode validation response")
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// TestExpression tests a TQM expression against sample torrents
+// POST /api/instances/{instanceID}/tqm/test
+func (h *TQMHandler) TestExpression(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.ParseInt(chi.URLParam(r, "instanceID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid instance ID")
+		http.Error(w, "Invalid instance ID", http.StatusBadRequest)
+		return
+	}
+
+	var req tqm.ExpressionTestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode expression test request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Expression == "" {
+		http.Error(w, "Expression is required", http.StatusBadRequest)
+		return
+	}
+
+	results, err := h.tqmManager.TestExpression(r.Context(), instanceID, &req)
+	if err != nil {
+		log.Error().Err(err).Int64("instanceID", instanceID).Str("expression", req.Expression).Msg("Failed to test expression")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		log.Error().Err(err).Msg("Failed to encode test results")
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// CreateFilter creates a new individual filter
+// POST /api/instances/{instanceID}/tqm/filters
+func (h *TQMHandler) CreateFilter(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.ParseInt(chi.URLParam(r, "instanceID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid instance ID")
+		http.Error(w, "Invalid instance ID", http.StatusBadRequest)
+		return
+	}
+
+	var req tqm.FilterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode filter request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if req.Name == "" {
+		http.Error(w, "Filter name is required", http.StatusBadRequest)
+		return
+	}
+	if req.Expression == "" {
+		http.Error(w, "Filter expression is required", http.StatusBadRequest)
+		return
+	}
+	if req.Mode == "" {
+		http.Error(w, "Filter mode is required", http.StatusBadRequest)
+		return
+	}
+	if req.Mode != "add" && req.Mode != "remove" && req.Mode != "full" {
+		http.Error(w, "Filter mode must be 'add', 'remove', or 'full'", http.StatusBadRequest)
+		return
+	}
+
+	filter, err := h.tqmManager.CreateFilter(r.Context(), instanceID, &req)
+	if err != nil {
+		log.Error().Err(err).Int64("instanceID", instanceID).Msg("Failed to create filter")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(filter); err != nil {
+		log.Error().Err(err).Msg("Failed to encode filter response")
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// UpdateFilter updates an existing filter
+// PUT /api/instances/{instanceID}/tqm/filters/{filterID}
+func (h *TQMHandler) UpdateFilter(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.ParseInt(chi.URLParam(r, "instanceID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid instance ID")
+		http.Error(w, "Invalid instance ID", http.StatusBadRequest)
+		return
+	}
+
+	filterID, err := strconv.ParseInt(chi.URLParam(r, "filterID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid filter ID")
+		http.Error(w, "Invalid filter ID", http.StatusBadRequest)
+		return
+	}
+
+	var req tqm.FilterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error().Err(err).Msg("Failed to decode filter request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate request
+	if req.Name == "" {
+		http.Error(w, "Filter name is required", http.StatusBadRequest)
+		return
+	}
+	if req.Expression == "" {
+		http.Error(w, "Filter expression is required", http.StatusBadRequest)
+		return
+	}
+	if req.Mode == "" {
+		http.Error(w, "Filter mode is required", http.StatusBadRequest)
+		return
+	}
+	if req.Mode != "add" && req.Mode != "remove" && req.Mode != "full" {
+		http.Error(w, "Filter mode must be 'add', 'remove', or 'full'", http.StatusBadRequest)
+		return
+	}
+
+	filter, err := h.tqmManager.UpdateFilter(r.Context(), instanceID, filterID, &req)
+	if err != nil {
+		log.Error().Err(err).Int64("instanceID", instanceID).Int64("filterID", filterID).Msg("Failed to update filter")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(filter); err != nil {
+		log.Error().Err(err).Msg("Failed to encode filter response")
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
+}
+
+// DeleteFilter deletes an existing filter
+// DELETE /api/instances/{instanceID}/tqm/filters/{filterID}
+func (h *TQMHandler) DeleteFilter(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.ParseInt(chi.URLParam(r, "instanceID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid instance ID")
+		http.Error(w, "Invalid instance ID", http.StatusBadRequest)
+		return
+	}
+
+	filterID, err := strconv.ParseInt(chi.URLParam(r, "filterID"), 10, 64)
+	if err != nil {
+		log.Error().Err(err).Msg("Invalid filter ID")
+		http.Error(w, "Invalid filter ID", http.StatusBadRequest)
+		return
+	}
+
+	err = h.tqmManager.DeleteFilter(r.Context(), instanceID, filterID)
+	if err != nil {
+		log.Error().Err(err).Int64("instanceID", instanceID).Int64("filterID", filterID).Msg("Failed to delete filter")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

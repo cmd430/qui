@@ -391,6 +391,294 @@ func (m *Manager) updateOperation(ctx context.Context, op *Operation) error {
 	return err
 }
 
+// GetFilterTemplates returns predefined filter templates
+func (m *Manager) GetFilterTemplates(ctx context.Context) ([]FilterTemplate, error) {
+	return FilterTemplates, nil
+}
+
+// ValidateExpression validates a TQM expression
+func (m *Manager) ValidateExpression(ctx context.Context, expression string) (*ExpressionValidationResult, error) {
+	// Use the autobrr/tqm library to compile and validate the expression
+	tqmClient, err := m.getTQMClientForValidation(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TQM client for validation: %w", err)
+	}
+
+	result, err := tqmClient.ValidateExpression(ctx, expression)
+	if err != nil {
+		return &ExpressionValidationResult{
+			Valid: false,
+			Error: err.Error(),
+		}, nil
+	}
+
+	return result, nil
+}
+
+// TestExpression tests a TQM expression against sample torrents
+func (m *Manager) TestExpression(ctx context.Context, instanceID int64, req *ExpressionTestRequest) (*ExpressionTestResponse, error) {
+	// Get TQM client for the instance
+	tqmClient, err := m.getTQMClient(ctx, instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TQM client: %w", err)
+	}
+
+	// Set default limit if not specified
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 10 // Default to 10 torrents for testing
+	}
+
+	results, err := tqmClient.TestExpression(ctx, req.Expression, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to test expression: %w", err)
+	}
+
+	return results, nil
+}
+
+// CreateFilter creates a new individual filter
+func (m *Manager) CreateFilter(ctx context.Context, instanceID int64, req *FilterRequest) (*TagRule, error) {
+	// Validate expression first
+	validationResult, err := m.ValidateExpression(ctx, req.Expression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate expression: %w", err)
+	}
+	if !validationResult.Valid {
+		return nil, fmt.Errorf("invalid expression: %s", validationResult.Error)
+	}
+
+	// Start transaction
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Get or create config for the instance
+	config, err := m.getConfigFromDBTx(ctx, tx, instanceID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Create default config
+			config, err = m.createDefaultConfigTx(ctx, tx, instanceID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create default config: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to get config: %w", err)
+		}
+	}
+
+	// Create the new tag rule
+	rule := TagRule{
+		ConfigID:   config.ID,
+		Name:       req.Name,
+		Mode:       req.Mode,
+		Expression: req.Expression,
+		UploadKB:   req.UploadKB,
+		Enabled:    req.Enabled,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	query := `INSERT INTO tqm_tag_rules (config_id, name, mode, expression, upload_kb, enabled, created_at, updated_at) 
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	result, err := tx.ExecContext(ctx, query, rule.ConfigID, rule.Name, rule.Mode, rule.Expression, rule.UploadKB, rule.Enabled, rule.CreatedAt, rule.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert tag rule: %w", err)
+	}
+
+	id, _ := result.LastInsertId()
+	rule.ID = id
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Clear cache
+	cacheKey := fmt.Sprintf("tqm:config:%d", instanceID)
+	m.cache.Del(cacheKey)
+
+	return &rule, nil
+}
+
+// UpdateFilter updates an existing filter
+func (m *Manager) UpdateFilter(ctx context.Context, instanceID int64, filterID int64, req *FilterRequest) (*TagRule, error) {
+	// Validate expression first
+	validationResult, err := m.ValidateExpression(ctx, req.Expression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate expression: %w", err)
+	}
+	if !validationResult.Valid {
+		return nil, fmt.Errorf("invalid expression: %s", validationResult.Error)
+	}
+
+	// Start transaction
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check if filter exists and belongs to the correct instance
+	var configID int64
+	checkQuery := `SELECT tr.config_id FROM tqm_tag_rules tr 
+                   JOIN tqm_configs tc ON tr.config_id = tc.id 
+                   WHERE tr.id = ? AND tc.instance_id = ?`
+	err = tx.QueryRowContext(ctx, checkQuery, filterID, instanceID).Scan(&configID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("filter not found")
+		}
+		return nil, fmt.Errorf("failed to check filter ownership: %w", err)
+	}
+
+	// Update the filter
+	updateQuery := `UPDATE tqm_tag_rules SET name = ?, mode = ?, expression = ?, upload_kb = ?, enabled = ?, updated_at = ? 
+                    WHERE id = ?`
+	updatedAt := time.Now()
+	_, err = tx.ExecContext(ctx, updateQuery, req.Name, req.Mode, req.Expression, req.UploadKB, req.Enabled, updatedAt, filterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update filter: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Clear cache
+	cacheKey := fmt.Sprintf("tqm:config:%d", instanceID)
+	m.cache.Del(cacheKey)
+
+	// Return updated filter
+	rule := &TagRule{
+		ID:         filterID,
+		ConfigID:   configID,
+		Name:       req.Name,
+		Mode:       req.Mode,
+		Expression: req.Expression,
+		UploadKB:   req.UploadKB,
+		Enabled:    req.Enabled,
+		UpdatedAt:  updatedAt,
+	}
+
+	return rule, nil
+}
+
+// DeleteFilter deletes an existing filter
+func (m *Manager) DeleteFilter(ctx context.Context, instanceID int64, filterID int64) error {
+	// Start transaction
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check if filter exists and belongs to the correct instance
+	checkQuery := `SELECT COUNT(1) FROM tqm_tag_rules tr 
+                   JOIN tqm_configs tc ON tr.config_id = tc.id 
+                   WHERE tr.id = ? AND tc.instance_id = ?`
+	var count int
+	err = tx.QueryRowContext(ctx, checkQuery, filterID, instanceID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check filter ownership: %w", err)
+	}
+	if count == 0 {
+		return fmt.Errorf("filter not found")
+	}
+
+	// Delete the filter
+	deleteQuery := `DELETE FROM tqm_tag_rules WHERE id = ?`
+	_, err = tx.ExecContext(ctx, deleteQuery, filterID)
+	if err != nil {
+		return fmt.Errorf("failed to delete filter: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	// Clear cache
+	cacheKey := fmt.Sprintf("tqm:config:%d", instanceID)
+	m.cache.Del(cacheKey)
+
+	return nil
+}
+
+// getTQMClientForValidation gets a TQM client for expression validation (uses any available instance)
+func (m *Manager) getTQMClientForValidation(ctx context.Context) (*Client, error) {
+	// Try to get any existing client first
+	m.mu.RLock()
+	for _, client := range m.clients {
+		m.mu.RUnlock()
+		return client, nil
+	}
+	m.mu.RUnlock()
+
+	// If no existing clients, try to create one with the first available instance
+	instances, err := m.instanceStore.List(ctx, true) // activeOnly = true
+	if err != nil {
+		return nil, fmt.Errorf("failed to list instances: %w", err)
+	}
+
+	if len(instances) == 0 {
+		return nil, fmt.Errorf("no instances available for validation")
+	}
+
+	// Use the first available instance for validation
+	return m.getTQMClient(ctx, int64(instances[0].ID))
+}
+
+// createDefaultConfigTx creates a default TQM configuration for an instance within a transaction
+func (m *Manager) createDefaultConfigTx(ctx context.Context, tx *sql.Tx, instanceID int64) (*Config, error) {
+	config := Config{
+		InstanceID: instanceID,
+		Name:       "Default Configuration",
+		Enabled:    true,
+		Filters:    DefaultFilters,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	// Marshal filters to JSON
+	if err := config.MarshalFilters(); err != nil {
+		return nil, fmt.Errorf("failed to marshal filters: %w", err)
+	}
+
+	// Insert config
+	query := `INSERT INTO tqm_configs (instance_id, name, enabled, filters_json, created_at, updated_at) 
+              VALUES (?, ?, ?, ?, ?, ?)`
+	result, err := tx.ExecContext(ctx, query, config.InstanceID, config.Name, config.Enabled, config.FiltersJSON, config.CreatedAt, config.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert config: %w", err)
+	}
+
+	id, _ := result.LastInsertId()
+	config.ID = id
+
+	// Insert default tag rules
+	for _, filter := range DefaultFilters {
+		rule := TagRule{
+			ConfigID:   config.ID,
+			Name:       filter.Name,
+			Mode:       filter.Mode,
+			Expression: filter.Expression,
+			Enabled:    filter.Enabled,
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		}
+
+		ruleQuery := `INSERT INTO tqm_tag_rules (config_id, name, mode, expression, enabled, created_at, updated_at) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?)`
+		_, err := tx.ExecContext(ctx, ruleQuery, rule.ConfigID, rule.Name, rule.Mode, rule.Expression, rule.Enabled, rule.CreatedAt, rule.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert tag rule: %w", err)
+		}
+	}
+
+	return &config, nil
+}
+
 // Close closes the TQM manager and all clients
 func (m *Manager) Close() error {
 	m.mu.Lock()

@@ -161,6 +161,14 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 							r.Put("/config", tqmHandler.UpdateTQMConfig)
 							r.Post("/retag", tqmHandler.PostRetag)
 							r.Get("/status", tqmHandler.GetTQMStatus)
+
+							// Filter management endpoints
+							r.Get("/templates", tqmHandler.GetFilterTemplates)
+							r.Post("/validate", tqmHandler.ValidateExpression)
+							r.Post("/test", tqmHandler.TestExpression)
+							r.Post("/filters", tqmHandler.CreateFilter)
+							r.Put("/filters/{filterID}", tqmHandler.UpdateFilter)
+							r.Delete("/filters/{filterID}", tqmHandler.DeleteFilter)
 						})
 					}
 				})

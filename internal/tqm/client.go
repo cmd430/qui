@@ -517,6 +517,204 @@ func (c *Client) createTagsFromConfig(ctx context.Context, config *Config) error
 	return nil
 }
 
+// ValidateExpression validates a TQM expression by attempting to compile it
+func (c *Client) ValidateExpression(ctx context.Context, expression string) (*ExpressionValidationResult, error) {
+	// Try to compile the expression using the expr library
+	_, err := expr.Compile(expression)
+	if err != nil {
+		return &ExpressionValidationResult{
+			Valid: false,
+			Error: err.Error(),
+		}, nil
+	}
+
+	// For valid expressions, try to extract referenced fields
+	// This is a basic implementation - could be enhanced to parse the AST
+	fields := extractFieldsFromExpression(expression)
+
+	return &ExpressionValidationResult{
+		Valid:  true,
+		Fields: fields,
+	}, nil
+}
+
+// TestExpression tests an expression against sample torrents from the instance
+func (c *Client) TestExpression(ctx context.Context, expression string, limit int) (*ExpressionTestResponse, error) {
+	if !c.IsConnected() {
+		if err := c.Connect(ctx); err != nil {
+			return nil, fmt.Errorf("failed to connect before testing expression: %w", err)
+		}
+	}
+
+	// Get torrents from qBittorrent
+	torrentsMap, err := c.tqmClient.GetTorrents(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get torrents: %w", err)
+	}
+
+	// Convert map to slice for easier handling
+	var torrents []tqmConfig.Torrent
+	for _, torrent := range torrentsMap {
+		torrents = append(torrents, torrent)
+	}
+
+	// Limit the number of torrents to test against
+	if limit > 0 && len(torrents) > limit {
+		torrents = torrents[:limit]
+	}
+
+	response := &ExpressionTestResponse{
+		TotalTested:  len(torrents),
+		MatchedCount: 0,
+		ErrorCount:   0,
+		Results:      make([]ExpressionTestResult, 0, len(torrents)),
+	}
+
+	// Compile the expression
+	program, err := expr.Compile(expression)
+	if err != nil {
+		// If expression doesn't compile, return error for all torrents
+		for _, torrent := range torrents {
+			response.Results = append(response.Results, ExpressionTestResult{
+				TorrentHash: torrent.Hash,
+				TorrentName: torrent.Name,
+				Matched:     false,
+				Error:       err.Error(),
+			})
+			response.ErrorCount++
+		}
+		return response, nil
+	}
+
+	// Test expression against each torrent
+	for _, torrent := range torrents {
+		result := ExpressionTestResult{
+			TorrentHash: torrent.Hash,
+			TorrentName: torrent.Name,
+		}
+
+		// Create environment variables for the torrent
+		env := createTorrentEnvironment(&torrent)
+
+		// Execute the expression
+		output, execErr := expr.Run(program, env)
+		if execErr != nil {
+			result.Matched = false
+			result.Error = execErr.Error()
+			response.ErrorCount++
+		} else {
+			result.EvaluatedTo = output
+			// Consider expression matched if it evaluates to true
+			if matched, ok := output.(bool); ok && matched {
+				result.Matched = true
+				response.MatchedCount++
+			} else {
+				result.Matched = false
+			}
+		}
+
+		response.Results = append(response.Results, result)
+	}
+
+	return response, nil
+}
+
+// extractFieldsFromExpression extracts field names from an expression string
+// This is a simple implementation that looks for common TQM field names
+func extractFieldsFromExpression(expression string) []string {
+	commonFields := []string{
+		"Seeds", "Leechers", "Ratio", "Size", "State", "Priority", "Progress",
+		"DownloadSpeed", "UploadSpeed", "ETA", "Category", "Tags", "TrackerName",
+		"TrackerStatus", "SeedingDays", "CompletedDays", "AddedDays", "Name", "Hash",
+	}
+
+	var foundFields []string
+	for _, field := range commonFields {
+		if contains(expression, field) {
+			foundFields = append(foundFields, field)
+		}
+	}
+
+	// Check for helper functions
+	helperFunctions := []string{"IsUnregistered", "IsTrackerDown", "HasAllTags", "RegexMatch"}
+	for _, function := range helperFunctions {
+		if contains(expression, function) {
+			foundFields = append(foundFields, function+"()")
+		}
+	}
+
+	return foundFields
+}
+
+// contains checks if a string contains a substring (case-sensitive)
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		(len(s) > len(substr) &&
+			(s[:len(substr)] == substr ||
+				s[len(s)-len(substr):] == substr ||
+				findSubstring(s, substr))))
+}
+
+// findSubstring is a simple substring search
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// createTorrentEnvironment creates an environment map for expression evaluation
+func createTorrentEnvironment(torrent *tqmConfig.Torrent) map[string]interface{} {
+	env := make(map[string]interface{})
+
+	// Map all the torrent fields for expression evaluation
+	env["Hash"] = torrent.Hash
+	env["Name"] = torrent.Name
+	env["Path"] = torrent.Path
+	env["Size"] = torrent.TotalBytes
+	env["State"] = torrent.State
+	env["Tags"] = torrent.Tags
+	env["Ratio"] = torrent.Ratio
+	env["Seeds"] = torrent.Seeds
+	env["Leechers"] = torrent.Peers // Peers is equivalent to leechers
+	env["TrackerName"] = torrent.TrackerName
+	env["TrackerStatus"] = torrent.TrackerStatus
+	env["IsPrivate"] = torrent.IsPrivate
+	env["SeedingDays"] = torrent.SeedingDays
+	env["SeedingHours"] = torrent.SeedingHours
+	env["AddedDays"] = torrent.AddedDays
+	env["AddedHours"] = torrent.AddedHours
+	// LastActivity fields are not available in TQM v1.16.0
+	env["Downloaded"] = torrent.Downloaded
+	env["Seeding"] = torrent.Seeding
+	env["Category"] = torrent.Label // Label is used as category in TQM
+
+	// Add helper functions that bind to this specific torrent
+	env["IsUnregistered"] = func() bool {
+		return torrent.IsUnregistered(context.Background())
+	}
+
+	env["IsTrackerDown"] = func() bool {
+		return torrent.IsTrackerDown()
+	}
+
+	env["HasAllTags"] = func(tags ...string) bool {
+		return torrent.HasAllTags(tags...)
+	}
+
+	env["HasAnyTag"] = func(tags ...string) bool {
+		return torrent.HasAnyTag(tags...)
+	}
+
+	env["RegexMatch"] = func(pattern string) bool {
+		return torrent.RegexMatch(pattern)
+	}
+
+	return env
+}
+
 // RetagResult represents the result of a retag operation
 type RetagResult struct {
 	StartedAt         time.Time      `json:"startedAt"`
