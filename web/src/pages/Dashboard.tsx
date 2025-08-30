@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useIncognitoMode } from "@/lib/incognito"
 import { useAlternativeSpeedLimits } from "@/hooks/useAlternativeSpeedLimits"
+import { TQMStatusIndicator, TQMEnabledIndicator } from "@/components/tqm/TQMStatusIndicator"
+import { RetagButton } from "@/components/tqm/RetagButton"
 
 
 // Custom hook to get all instance stats using dynamic queries
@@ -314,11 +316,22 @@ function InstanceCard({ instance }: { instance: InstanceResponse }) {
                 </Tooltip>
               )}
               {stats.connected && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <RetagButton instanceId={instance.id} />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Retag torrents using TQM
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {stats.connected && (
                 <InstanceSettingsButton
                   instanceId={instance.id}
                   instanceName={instance.name}
                 />
               )}
+              <TQMStatusIndicator instanceId={instance.id} />
               <Badge variant={stats.connected ? "default" : "destructive"}>
                 {stats.connected ? "Connected" : "Disconnected"}
               </Badge>
@@ -675,6 +688,17 @@ function QuickActionsDropdown({ statsData }: { statsData: Array<{ instance: Inst
               <span>Add to {instance.name}</span>
             </DropdownMenuItem>
           </Link>
+        ))}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>TQM Actions</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {connectedInstances.map(instance => (
+          <RetagButton
+            key={`retag-${instance.id}`}
+            instanceId={instance.id}
+            variant="dropdown-item"
+          />
         ))}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -30,6 +30,7 @@ import (
 	"github.com/autobrr/qui/internal/polar"
 	"github.com/autobrr/qui/internal/qbittorrent"
 	"github.com/autobrr/qui/internal/services"
+	"github.com/autobrr/qui/internal/tqm"
 	"github.com/autobrr/qui/internal/web"
 	webfs "github.com/autobrr/qui/web"
 )
@@ -437,6 +438,13 @@ func (app *Application) runServer() {
 	syncManager := qbittorrent.NewSyncManager(clientPool)
 	metricsManager := metrics.NewManager(syncManager, clientPool)
 
+	// Initialize TQM manager
+	tqmManager, err := tqm.NewManager(db.Conn(), instanceStore, clientPool)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to initialize TQM manager - TQM functionality will be disabled")
+		tqmManager = nil
+	}
+
 	// Initialize web handler (for embedded frontend)
 	webHandler, err := web.NewHandler(Version, cfg.Config.BaseURL, webfs.DistDirFS)
 	if err != nil {
@@ -472,6 +480,7 @@ func (app *Application) runServer() {
 		InstanceStore:       instanceStore,
 		ClientPool:          clientPool,
 		SyncManager:         syncManager,
+		TQMManager:          tqmManager,
 		WebHandler:          webHandler,
 		ThemeLicenseService: themeLicenseService,
 		MetricsManager:      metricsManager,

@@ -22,6 +22,7 @@ export interface Instance {
   username: string
   basicUsername?: string
   isActive: boolean
+  tqmEnabled?: boolean
   lastConnectedAt?: string
   createdAt: string
   updatedAt: string
@@ -383,3 +384,6 @@ export interface AppPreferences {
   // Add catch-all for any additional fields from the API
   [key: string]: unknown
 }
+
+// Re-export TQM types
+export * from "./tqm"

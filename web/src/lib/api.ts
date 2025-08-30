@@ -10,6 +10,11 @@ import type {
   InstanceResponse,
   MainData,
   TorrentResponse,
+  TQMConfigResponse,
+  TQMConfigRequest,
+  TQMRetagRequest,
+  TQMRetagResponse,
+  TQMStatusResponse,
   User
 } from "@/types"
 import { getApiBaseUrl } from "./base-url"
@@ -438,6 +443,32 @@ class ApiClient {
     return this.request<{ enabled: boolean }>(`/instances/${instanceId}/alternative-speed-limits/toggle`, {
       method: "POST",
     })
+  }
+
+  // TQM (Torrent Queue Manager) endpoints
+  async getTQMConfig(instanceId: number): Promise<TQMConfigResponse> {
+    return this.request<TQMConfigResponse>(`/instances/${instanceId}/tqm/config`)
+  }
+
+  async updateTQMConfig(
+    instanceId: number,
+    config: TQMConfigRequest
+  ): Promise<TQMConfigResponse> {
+    return this.request<TQMConfigResponse>(`/instances/${instanceId}/tqm/config`, {
+      method: "PUT",
+      body: JSON.stringify(config),
+    })
+  }
+
+  async retag(instanceId: number, request?: TQMRetagRequest): Promise<TQMRetagResponse> {
+    return this.request<TQMRetagResponse>(`/instances/${instanceId}/tqm/retag`, {
+      method: "POST",
+      body: JSON.stringify(request || { instanceId }),
+    })
+  }
+
+  async getTQMStatus(instanceId: number): Promise<TQMStatusResponse> {
+    return this.request<TQMStatusResponse>(`/instances/${instanceId}/tqm/status`)
   }
 }
 

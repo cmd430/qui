@@ -20,6 +20,7 @@ import (
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/qbittorrent"
 	"github.com/autobrr/qui/internal/services"
+	"github.com/autobrr/qui/internal/tqm"
 	"github.com/autobrr/qui/internal/web"
 	"github.com/autobrr/qui/internal/web/swagger"
 )
@@ -32,6 +33,7 @@ type Dependencies struct {
 	InstanceStore       *models.InstanceStore
 	ClientPool          *qbittorrent.ClientPool
 	SyncManager         *qbittorrent.SyncManager
+	TQMManager          *tqm.Manager
 	WebHandler          *web.Handler
 	ThemeLicenseService *services.ThemeLicenseService
 	MetricsManager      *metrics.Manager
@@ -60,6 +62,12 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 	instancesHandler := handlers.NewInstancesHandler(deps.InstanceStore, deps.ClientPool, deps.SyncManager)
 	torrentsHandler := handlers.NewTorrentsHandler(deps.SyncManager)
 	preferencesHandler := handlers.NewPreferencesHandler(deps.SyncManager)
+
+	// TQM handler (optional, only if TQM manager is configured)
+	var tqmHandler *handlers.TQMHandler
+	if deps.TQMManager != nil {
+		tqmHandler = handlers.NewTQMHandler(deps.TQMManager)
+	}
 
 	// Theme license handler (optional, only if service is configured)
 	var themeLicenseHandler *handlers.ThemeLicenseHandler
@@ -145,6 +153,16 @@ func NewRouter(deps *Dependencies) *chi.Mux {
 					// Alternative speed limits
 					r.Get("/alternative-speed-limits", preferencesHandler.GetAlternativeSpeedLimitsMode)
 					r.Post("/alternative-speed-limits/toggle", preferencesHandler.ToggleAlternativeSpeedLimits)
+
+					// TQM (Torrent Queue Manager) routes
+					if tqmHandler != nil {
+						r.Route("/tqm", func(r chi.Router) {
+							r.Get("/config", tqmHandler.GetTQMConfig)
+							r.Put("/config", tqmHandler.UpdateTQMConfig)
+							r.Post("/retag", tqmHandler.PostRetag)
+							r.Get("/status", tqmHandler.GetTQMStatus)
+						})
+					}
 				})
 			})
 
