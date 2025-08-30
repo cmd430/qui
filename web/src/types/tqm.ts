@@ -106,3 +106,66 @@ export const TQM_OPERATION_STATUS = {
 
 export type TQMTagMode = keyof typeof TQM_TAG_MODES
 export type TQMOperationStatus = keyof typeof TQM_OPERATION_STATUS
+
+// New types for extended TQM API
+export interface TQMFilterTemplate {
+  id: string
+  name: string
+  description: string
+  expression: string
+  category: string
+  mode: TQMTagMode
+  uploadKb?: number
+}
+
+export interface TQMFilterRequest {
+  name: string
+  mode: TQMTagMode
+  expression: string
+  uploadKb?: number
+  enabled: boolean
+}
+
+export interface TQMExpressionValidationRequest {
+  expression: string
+}
+
+export interface TQMExpressionValidationResult {
+  valid: boolean
+  error?: string
+  fields?: string[]
+}
+
+export interface TQMExpressionTestRequest {
+  expression: string
+  limit?: number
+}
+
+export interface TQMExpressionTestResult {
+  torrentHash: string
+  torrentName: string
+  matched: boolean
+  error?: string
+  evaluatedTo?: unknown
+}
+
+export interface TQMExpressionTestResponse {
+  results: TQMExpressionTestResult[]
+  totalTested: number
+  matchedCount: number
+  errorCount: number
+}
+
+// Filter template categories for UI organization
+export const TQM_FILTER_CATEGORIES = {
+  tracker: "Tracker Issues",
+  seeding: "Seeding Management",
+  ratio: "Ratio-based",
+  age: "Age-based",
+  size: "Size-based",
+  bandwidth: "Bandwidth Control",
+  state: "Torrent State",
+  recent: "Recent Activity",
+} as const
+
+export type TQMFilterCategory = keyof typeof TQM_FILTER_CATEGORIES

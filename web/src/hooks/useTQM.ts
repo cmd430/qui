@@ -5,7 +5,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/lib/api"
-import type { TQMConfigRequest, TQMRetagRequest } from "@/types"
+import type {
+  TQMConfigRequest,
+  TQMRetagRequest,
+  TQMFilterRequest,
+  TQMExpressionValidationRequest,
+  TQMExpressionTestRequest
+} from "@/types"
 
 /**
  * Hook to get TQM configuration for an instance
@@ -85,4 +91,82 @@ export function useTQMEnabled(instanceId: number) {
 export function useLastTQMOperation(instanceId: number) {
   const { data: status } = useTQMStatus(instanceId)
   return status?.lastRun
+}
+
+/**
+ * Hook to get TQM filter templates
+ */
+export function useTQMFilterTemplates(instanceId: number) {
+  return useQuery({
+    queryKey: ["tqm-filter-templates", instanceId],
+    queryFn: () => api.getTQMFilterTemplates(instanceId),
+    staleTime: 60 * 60 * 1000, // 1 hour - templates don't change often
+    gcTime: 2 * 60 * 60 * 1000, // 2 hours
+  })
+}
+
+/**
+ * Hook to validate TQM expressions
+ */
+export function useValidateTQMExpression(instanceId: number) {
+  return useMutation({
+    mutationFn: (request: TQMExpressionValidationRequest) =>
+      api.validateTQMExpression(instanceId, request),
+  })
+}
+
+/**
+ * Hook to test TQM expressions against sample torrents
+ */
+export function useTestTQMExpression(instanceId: number) {
+  return useMutation({
+    mutationFn: (request: TQMExpressionTestRequest) =>
+      api.testTQMExpression(instanceId, request),
+  })
+}
+
+/**
+ * Hook to create a new TQM filter
+ */
+export function useCreateTQMFilter(instanceId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (filter: TQMFilterRequest) => api.createTQMFilter(instanceId, filter),
+    onSuccess: () => {
+      // Invalidate TQM config to refresh filter list
+      queryClient.invalidateQueries({ queryKey: ["tqm-config", instanceId] })
+    },
+  })
+}
+
+/**
+ * Hook to update an existing TQM filter
+ */
+export function useUpdateTQMFilter(instanceId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ filterId, filter }: { filterId: number; filter: TQMFilterRequest }) =>
+      api.updateTQMFilter(instanceId, filterId, filter),
+    onSuccess: () => {
+      // Invalidate TQM config to refresh filter list
+      queryClient.invalidateQueries({ queryKey: ["tqm-config", instanceId] })
+    },
+  })
+}
+
+/**
+ * Hook to delete a TQM filter
+ */
+export function useDeleteTQMFilter(instanceId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (filterId: number) => api.deleteTQMFilter(instanceId, filterId),
+    onSuccess: () => {
+      // Invalidate TQM config to refresh filter list
+      queryClient.invalidateQueries({ queryKey: ["tqm-config", instanceId] })
+    },
+  })
 }

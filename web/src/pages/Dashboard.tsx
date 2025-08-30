@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useIncognitoMode } from "@/lib/incognito"
 import { useAlternativeSpeedLimits } from "@/hooks/useAlternativeSpeedLimits"
-import { TQMStatusIndicator, TQMEnabledIndicator } from "@/components/tqm/TQMStatusIndicator"
+import { TQMStatusIndicator } from "@/components/tqm/TQMStatusIndicator"
 import { RetagButton } from "@/components/tqm/RetagButton"
 
 

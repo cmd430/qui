@@ -3,6 +3,7 @@ package tqm
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -491,6 +492,12 @@ func (m *Manager) CreateFilter(ctx context.Context, instanceID int64, req *Filte
 	id, _ := result.LastInsertId()
 	rule.ID = id
 
+	// Update filters_json in tqm_configs to keep it in sync
+	err = m.syncFiltersJSONTx(ctx, tx, config.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sync filters_json: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -542,6 +549,12 @@ func (m *Manager) UpdateFilter(ctx context.Context, instanceID int64, filterID i
 		return nil, fmt.Errorf("failed to update filter: %w", err)
 	}
 
+	// Update filters_json in tqm_configs to keep it in sync
+	err = m.syncFiltersJSONTx(ctx, tx, configID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sync filters_json: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -574,17 +587,17 @@ func (m *Manager) DeleteFilter(ctx context.Context, instanceID int64, filterID i
 	}
 	defer tx.Rollback()
 
-	// Check if filter exists and belongs to the correct instance
-	checkQuery := `SELECT COUNT(1) FROM tqm_tag_rules tr 
+	// Check if filter exists and belongs to the correct instance, get configID
+	var configID int64
+	checkQuery := `SELECT tr.config_id FROM tqm_tag_rules tr 
                    JOIN tqm_configs tc ON tr.config_id = tc.id 
                    WHERE tr.id = ? AND tc.instance_id = ?`
-	var count int
-	err = tx.QueryRowContext(ctx, checkQuery, filterID, instanceID).Scan(&count)
+	err = tx.QueryRowContext(ctx, checkQuery, filterID, instanceID).Scan(&configID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("filter not found")
+		}
 		return fmt.Errorf("failed to check filter ownership: %w", err)
-	}
-	if count == 0 {
-		return fmt.Errorf("filter not found")
 	}
 
 	// Delete the filter
@@ -594,6 +607,12 @@ func (m *Manager) DeleteFilter(ctx context.Context, instanceID int64, filterID i
 		return fmt.Errorf("failed to delete filter: %w", err)
 	}
 
+	// Update filters_json in tqm_configs to keep it in sync
+	err = m.syncFiltersJSONTx(ctx, tx, configID)
+	if err != nil {
+		return fmt.Errorf("failed to sync filters_json: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -601,6 +620,48 @@ func (m *Manager) DeleteFilter(ctx context.Context, instanceID int64, filterID i
 	// Clear cache
 	cacheKey := fmt.Sprintf("tqm:config:%d", instanceID)
 	m.cache.Del(cacheKey)
+
+	return nil
+}
+
+// syncFiltersJSONTx updates the filters_json field in tqm_configs to match the current tqm_tag_rules
+func (m *Manager) syncFiltersJSONTx(ctx context.Context, tx *sql.Tx, configID int64) error {
+	// Get all filters for this config
+	filtersQuery := `SELECT id, name, mode, expression, upload_kb, enabled, created_at, updated_at 
+                     FROM tqm_tag_rules WHERE config_id = ? ORDER BY created_at`
+	rows, err := tx.QueryContext(ctx, filtersQuery, configID)
+	if err != nil {
+		return fmt.Errorf("failed to query filters: %w", err)
+	}
+	defer rows.Close()
+
+	var filters []TagRule
+	for rows.Next() {
+		var filter TagRule
+		err := rows.Scan(&filter.ID, &filter.Name, &filter.Mode, &filter.Expression,
+			&filter.UploadKB, &filter.Enabled, &filter.CreatedAt, &filter.UpdatedAt)
+		if err != nil {
+			return fmt.Errorf("failed to scan filter: %w", err)
+		}
+		filter.ConfigID = configID
+		filters = append(filters, filter)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate filters: %w", err)
+	}
+
+	// Convert filters to JSON
+	filtersJSON, err := json.Marshal(filters)
+	if err != nil {
+		return fmt.Errorf("failed to marshal filters: %w", err)
+	}
+
+	// Update the filters_json field
+	updateConfigQuery := `UPDATE tqm_configs SET filters_json = ?, updated_at = ? WHERE id = ?`
+	_, err = tx.ExecContext(ctx, updateConfigQuery, string(filtersJSON), time.Now(), configID)
+	if err != nil {
+		return fmt.Errorf("failed to update filters_json: %w", err)
+	}
 
 	return nil
 }

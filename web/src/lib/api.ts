@@ -15,6 +15,13 @@ import type {
   TQMRetagRequest,
   TQMRetagResponse,
   TQMStatusResponse,
+  TQMFilterTemplate,
+  TQMFilterRequest,
+  TQMTagRule,
+  TQMExpressionValidationRequest,
+  TQMExpressionValidationResult,
+  TQMExpressionTestRequest,
+  TQMExpressionTestResponse,
   User
 } from "@/types"
 import { getApiBaseUrl } from "./base-url"
@@ -469,6 +476,58 @@ class ApiClient {
 
   async getTQMStatus(instanceId: number): Promise<TQMStatusResponse> {
     return this.request<TQMStatusResponse>(`/instances/${instanceId}/tqm/status`)
+  }
+
+  // Extended TQM API methods
+  async getTQMFilterTemplates(instanceId: number): Promise<TQMFilterTemplate[]> {
+    return this.request<TQMFilterTemplate[]>(`/instances/${instanceId}/tqm/templates`)
+  }
+
+  async validateTQMExpression(
+    instanceId: number,
+    request: TQMExpressionValidationRequest
+  ): Promise<TQMExpressionValidationResult> {
+    return this.request<TQMExpressionValidationResult>(
+      `/instances/${instanceId}/tqm/validate`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      }
+    )
+  }
+
+  async testTQMExpression(
+    instanceId: number,
+    request: TQMExpressionTestRequest
+  ): Promise<TQMExpressionTestResponse> {
+    return this.request<TQMExpressionTestResponse>(`/instances/${instanceId}/tqm/test`, {
+      method: "POST",
+      body: JSON.stringify(request),
+    })
+  }
+
+  async createTQMFilter(instanceId: number, filter: TQMFilterRequest): Promise<TQMTagRule> {
+    return this.request<TQMTagRule>(`/instances/${instanceId}/tqm/filters`, {
+      method: "POST",
+      body: JSON.stringify(filter),
+    })
+  }
+
+  async updateTQMFilter(
+    instanceId: number,
+    filterId: number,
+    filter: TQMFilterRequest
+  ): Promise<TQMTagRule> {
+    return this.request<TQMTagRule>(`/instances/${instanceId}/tqm/filters/${filterId}`, {
+      method: "PUT",
+      body: JSON.stringify(filter),
+    })
+  }
+
+  async deleteTQMFilter(instanceId: number, filterId: number): Promise<void> {
+    return this.request<void>(`/instances/${instanceId}/tqm/filters/${filterId}`, {
+      method: "DELETE",
+    })
   }
 }
 
