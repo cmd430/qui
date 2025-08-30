@@ -6,12 +6,10 @@
 import { useEffect } from "react"
 import { useForm } from "@tanstack/react-form"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useUpdateTQMConfig } from "@/hooks/useTQM"
-import { RetagButton } from "./RetagButton"
 import { TQMStatusIndicator } from "./TQMStatusIndicator"
 import type { TQMConfigResponse } from "@/types"
 import { toast } from "sonner"
@@ -31,13 +29,12 @@ export function TQMConfigurationForm({
 
   const form = useForm({
     defaultValues: {
-      name: config?.config.name ?? "Default Configuration",
       enabled: config?.config.enabled ?? true,
     },
     onSubmit: async ({ value }) => {
       updateConfig(
         {
-          name: value.name,
+          name: "TQM Configuration", // Use fixed name since we're not making it configurable
           enabled: value.enabled,
           filters: config?.tagRules ?? [],
         },
@@ -56,21 +53,14 @@ export function TQMConfigurationForm({
   // Update form values when config changes (following CLAUDE.md best practices)
   useEffect(() => {
     if (config?.config) {
-      form.setFieldValue("name", config.config.name ?? "Default Configuration")
       form.setFieldValue("enabled", config.config.enabled ?? true)
     }
-  }, [config?.config.name, config?.config.enabled, form])
+  }, [config, form])
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Basic Configuration</CardTitle>
-          <CardDescription>
-            Configure basic TQM settings for this instance
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-6">
           <form
             onSubmit={(e) => {
               e.preventDefault()
@@ -79,23 +69,6 @@ export function TQMConfigurationForm({
             }}
           >
             <div className="grid gap-4">
-              <form.Field
-                name="name"
-                children={(field) => (
-                  <div className="space-y-2">
-                    <Label htmlFor={field.name}>Configuration Name</Label>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="Enter configuration name"
-                    />
-                  </div>
-                )}
-              />
-
               <form.Field
                 name="enabled"
                 children={(field) => (
@@ -135,18 +108,6 @@ export function TQMConfigurationForm({
             <div className="space-y-2">
               <div className="text-sm font-medium">Current Status</div>
               <TQMStatusIndicator instanceId={instanceId} />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <RetagButton
-                instanceId={instanceId}
-                variant="button"
-                size="default"
-                disabled={!config?.config.enabled}
-              />
-              <div className="text-sm text-muted-foreground">
-                Retag Torrents
-              </div>
             </div>
           </div>
 

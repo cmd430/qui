@@ -11,14 +11,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useTestTQMExpression } from "@/hooks/useTQM"
-import { Check, X, Loader2, Play, Info } from "lucide-react"
+import { Check, X, Loader2, Play, Copy } from "lucide-react"
 import type { TQMExpressionTestResponse } from "@/types"
 
 interface TQMExpressionTesterProps {
@@ -35,7 +33,6 @@ export function TQMExpressionTester({
   onOpenChange,
 }: TQMExpressionTesterProps) {
   const [testExpression, setTestExpression] = useState("")
-  const [testLimit, setTestLimit] = useState(10)
   const [testResults, setTestResults] = useState<TQMExpressionTestResponse | null>(null)
 
   const { mutate: testExpressionMutation, isPending: isTesting } = useTestTQMExpression(instanceId)
@@ -53,7 +50,7 @@ export function TQMExpressionTester({
     testExpressionMutation(
       {
         expression: testExpression,
-        limit: testLimit,
+        // Backend will use default limit (10) for performance
       },
       {
         onSuccess: (result) => {
@@ -71,50 +68,35 @@ export function TQMExpressionTester({
     )
   }
 
-  const getResultColor = (matched: boolean, hasError: boolean) => {
-    if (hasError) return "text-destructive"
-    return matched ? "text-green-600" : "text-muted-foreground"
-  }
-
-  const getResultIcon = (matched: boolean, hasError: boolean) => {
-    if (hasError) return <X className="h-4 w-4" />
-    return matched ? <Check className="h-4 w-4" /> : null
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="!max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Test Expression</DialogTitle>
+          <DialogTitle>Test Expression (Dry Run)</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 flex-1 flex flex-col min-h-0">
+        <div className="space-y-4 flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Test Configuration */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="test-expression">Expression to Test</Label>
-              <Textarea
-                id="test-expression"
-                value={testExpression}
-                onChange={(e) => setTestExpression(e.target.value)}
-                placeholder="Enter TQM expression to test"
-                rows={3}
-                className="font-mono text-sm"
-              />
-            </div>
-
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <Label htmlFor="test-limit">Test Against (Max Torrents)</Label>
-                <Input
-                  id="test-limit"
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={testLimit}
-                  onChange={(e) => setTestLimit(parseInt(e.target.value) || 10)}
+              <div className="space-y-2">
+                <Label htmlFor="test-expression">Expression to Test</Label>
+                <p className="text-sm text-muted-foreground">
+                  Test your TQM expression against sample torrents from this instance. No tags will be applied.
+                </p>
+                <Textarea
+                  id="test-expression"
+                  value={testExpression}
+                  onChange={(e) => setTestExpression(e.target.value)}
+                  placeholder="Enter TQM expression to test (e.g., Seeds <= 3 && !IsUnregistered())"
+                  rows={3}
+                  className="font-mono text-sm"
                 />
               </div>
+            </div>
+
+            <div className="flex justify-end">
               <Button
                 onClick={handleTest}
                 disabled={!testExpression.trim() || isTesting}
@@ -129,115 +111,59 @@ export function TQMExpressionTester({
             </div>
           </div>
 
-          {/* Test Results Summary */}
-          {testResults && (
+
+          {/* Detailed Results */}
+          {testResults && testResults.results.filter(result => result.matched).length > 0 && (
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Info className="h-4 w-4" />
-                  Test Results
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-600" />
+                  Matched Torrents ({testResults.results.filter(result => result.matched).length})
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <div className="text-2xl font-bold">{testResults.totalTested}</div>
-                    <div className="text-sm text-muted-foreground">Torrents Tested</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-green-600">
-                      {testResults.matchedCount}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Matched</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-destructive">
-                      {testResults.errorCount}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Errors</div>
-                  </div>
-                </div>
-
-                {testResults.totalTested > 0 && (
-                  <div className="mt-4">
-                    <div className="text-sm text-muted-foreground mb-2">
-                      Match Rate: {Math.round((testResults.matchedCount / testResults.totalTested) * 100)}%
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                        style={{
-                          width: `${(testResults.matchedCount / testResults.totalTested) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Detailed Results */}
-          {testResults && testResults.results.length > 0 && (
-            <Card className="flex-1 flex flex-col min-h-0">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Detailed Results</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 min-h-0">
-                <ScrollArea className="h-full">
-                  <div className="space-y-2">
-                    {testResults.results.map((result) => (
-                      <div
-                        key={result.torrentHash}
-                        className={`p-3 border rounded-lg ${
-                          result.error? "border-destructive/50 bg-destructive/5": result.matched? "border-green-500/50 bg-green-500/5": "border-border"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div
-                                className={getResultColor(result.matched, !!result.error)}
-                              >
-                                {getResultIcon(result.matched, !!result.error)}
-                              </div>
-                              <div className="font-medium text-sm truncate">
-                                {result.torrentName}
-                              </div>
-                              <Badge
-                                variant={
-                                  result.error? "destructive": result.matched? "default": "secondary"
-                                }
-                                className="text-xs"
-                              >
-                                {result.error? "Error": result.matched? "Match": "No Match"}
-                              </Badge>
-                            </div>
-
-                            <div className="text-xs text-muted-foreground mb-1">
-                              Hash: {result.torrentHash}
-                            </div>
-
-                            {result.error && (
-                              <div className="text-xs text-destructive">
-                                Error: {result.error}
-                              </div>
-                            )}
-
-                            {result.evaluatedTo !== undefined && !result.error && (
-                              <div className="text-xs text-muted-foreground">
-                                Evaluated to:{" "}
-                                <code className="bg-muted px-1 py-0.5 rounded">
-                                  {JSON.stringify(result.evaluatedTo)}
-                                </code>
-                              </div>
-                            )}
-                          </div>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {testResults.results.filter(result => result.matched).map((result) => (
+                    <div
+                      key={result.torrentHash}
+                      className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline" className="text-xs px-2 py-0 h-5 bg-green-50 text-green-700 border-green-200">
+                            ✓ Match
+                          </Badge>
                         </div>
+
+                        <div className="font-medium text-sm mb-1 break-words">
+                          {result.torrentName}
+                        </div>
+
+                        <div className="text-xs text-muted-foreground font-mono mb-1">
+                          {result.torrentHash.slice(0, 20)}...{result.torrentHash.slice(-12)}
+                        </div>
+
+                        {result.evaluatedTo !== undefined && (
+                          <div className="text-xs text-muted-foreground">
+                            Result: <code className="bg-muted px-1 py-0.5 rounded">{JSON.stringify(result.evaluatedTo)}</code>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
+
+                      <div className="flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => navigator.clipboard.writeText(result.torrentHash)}
+                          title="Copy full hash"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -249,6 +175,21 @@ export function TQMExpressionTester({
                 <div className="text-muted-foreground">
                   No torrents found to test against. Make sure the instance has torrents.
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* No Matches State */}
+          {testResults && testResults.results.length > 0 && testResults.results.filter(result => result.matched).length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <div className="text-muted-foreground mb-2">
+                  <X className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                  No torrents matched your expression
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Try adjusting your expression or check that your instance has torrents that meet the criteria.
+                </p>
               </CardContent>
             </Card>
           )}

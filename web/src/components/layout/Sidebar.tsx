@@ -11,7 +11,8 @@ import {
   Settings,
   LogOut,
   HardDrive,
-  Github
+  Github,
+  Tags
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -35,6 +36,11 @@ const navigation: NavItem[] = [
     title: "Instances",
     href: "/instances",
     icon: Server,
+  },
+  {
+    title: "TQM",
+    href: "/tqm",
+    icon: Tags,
   },
   {
     title: "Settings",

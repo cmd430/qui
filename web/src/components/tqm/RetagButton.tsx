@@ -14,6 +14,7 @@ interface RetagButtonProps {
   variant?: "button" | "dropdown-item"
   size?: "sm" | "default"
   disabled?: boolean
+  showText?: boolean
 }
 
 export function RetagButton({
@@ -21,6 +22,7 @@ export function RetagButton({
   variant = "button",
   size = "sm",
   disabled = false,
+  showText = false,
 }: RetagButtonProps) {
   const { mutate: retag, isPending } = useRetag(instanceId)
 
@@ -72,12 +74,17 @@ export function RetagButton({
       size={size}
       onClick={handleRetag}
       disabled={disabled || isPending}
-      className="h-8 w-8 p-0"
+      className={showText ? "" : "h-8 w-8 p-0"}
     >
       {isPending ? (
         <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
         <Tags className="h-4 w-4" />
+      )}
+      {showText && (
+        <span className="ml-2">
+          {isPending ? "Running..." : "Run TQM"}
+        </span>
       )}
     </Button>
   )

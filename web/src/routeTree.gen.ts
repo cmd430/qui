@@ -1,8 +1,3 @@
-/*
- * Copyright (c) 2025, s0up and the autobrr contributors.
- * SPDX-License-Identifier: GPL-2.0-or-later
- */
-
 /* eslint-disable */
 
 // @ts-nocheck
@@ -18,6 +13,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedTqmRouteImport } from './routes/_authenticated/tqm'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedInstancesRouteImport } from './routes/_authenticated/instances'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -42,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedTqmRoute = AuthenticatedTqmRouteImport.update({
+  id: '/tqm',
+  path: '/tqm',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -78,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/instances': typeof AuthenticatedInstancesRouteWithChildren
   '/settings': typeof AuthenticatedSettingsRoute
+  '/tqm': typeof AuthenticatedTqmRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances/': typeof AuthenticatedInstancesIndexRoute
 }
@@ -87,6 +89,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/tqm': typeof AuthenticatedTqmRoute
   '/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/instances': typeof AuthenticatedInstancesIndexRoute
 }
@@ -99,6 +102,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/instances': typeof AuthenticatedInstancesRouteWithChildren
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/tqm': typeof AuthenticatedTqmRoute
   '/_authenticated/instances/$instanceId': typeof AuthenticatedInstancesInstanceIdRoute
   '/_authenticated/instances/': typeof AuthenticatedInstancesIndexRoute
 }
@@ -111,6 +115,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/instances'
     | '/settings'
+    | '/tqm'
     | '/instances/$instanceId'
     | '/instances/'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +125,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/dashboard'
     | '/settings'
+    | '/tqm'
     | '/instances/$instanceId'
     | '/instances'
   id:
@@ -131,6 +137,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/instances'
     | '/_authenticated/settings'
+    | '/_authenticated/tqm'
     | '/_authenticated/instances/$instanceId'
     | '/_authenticated/instances/'
   fileRoutesById: FileRoutesById
@@ -171,6 +178,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/tqm': {
+      id: '/_authenticated/tqm'
+      path: '/tqm'
+      fullPath: '/tqm'
+      preLoaderRoute: typeof AuthenticatedTqmRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -231,12 +245,14 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInstancesRoute: typeof AuthenticatedInstancesRouteWithChildren
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedTqmRoute: typeof AuthenticatedTqmRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInstancesRoute: AuthenticatedInstancesRouteWithChildren,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedTqmRoute: AuthenticatedTqmRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

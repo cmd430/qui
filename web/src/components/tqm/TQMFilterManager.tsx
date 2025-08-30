@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Plus, Edit, Trash2, TestTube } from "lucide-react"
 import { TQMFilterDialog } from "./TQMFilterDialog"
 import { TQMExpressionTester } from "./TQMExpressionTester"
-import { useDeleteTQMFilter } from "@/hooks/useTQM"
+import { useDeleteTQMFilter, useUpdateTQMFilter } from "@/hooks/useTQM"
 import type { TQMConfigResponse, TQMTagRule, TQM_TAG_MODES } from "@/types"
 import { toast } from "sonner"
 
@@ -31,6 +31,7 @@ export function TQMFilterManager({
   const [testingExpression, setTestingExpression] = useState<string>("")
 
   const { mutate: deleteFilter, isPending: isDeletingFilter } = useDeleteTQMFilter(instanceId)
+  const { mutate: updateFilter, isPending: isUpdatingFilter } = useUpdateTQMFilter(instanceId)
 
   const handleEditFilter = (filter: TQMTagRule) => {
     setEditingFilter(filter)
@@ -58,6 +59,33 @@ export function TQMFilterManager({
   const handleCreateFilter = () => {
     setEditingFilter(undefined)
     setFilterDialogOpen(true)
+  }
+
+  const handleToggleFilter = (filter: TQMTagRule) => {
+    if (!filter.id) return
+
+    updateFilter(
+      {
+        filterId: filter.id,
+        filter: {
+          name: filter.name,
+          mode: filter.mode,
+          expression: filter.expression,
+          uploadKb: filter.uploadKb,
+          enabled: !filter.enabled,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            `Filter "${filter.name}" ${!filter.enabled ? "enabled" : "disabled"}`
+          )
+        },
+        onError: (error) => {
+          toast.error(`Failed to update filter: ${error.message}`)
+        },
+      }
+    )
   }
 
   const getModeColor = (mode: string): "default" | "secondary" | "destructive" => {
@@ -130,7 +158,8 @@ export function TQMFilterManager({
                     <div className="flex items-center space-x-1">
                       <Switch
                         checked={filter.enabled}
-                        disabled={true} // Read-only for now, editing handled through dialog
+                        disabled={isUpdatingFilter}
+                        onCheckedChange={() => handleToggleFilter(filter)}
                       />
                       <span className="text-xs text-muted-foreground">
                         {filter.enabled ? "Enabled" : "Disabled"}
