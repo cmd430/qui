@@ -218,6 +218,11 @@ func (sm *SyncManager) GetTorrentsWithFilters(ctx context.Context, instanceID in
 		Int("filtered", len(filteredTorrents)).
 		Msg("Applied search filtering")
 
+	// Apply custom sorting for priority field to handle queued vs non-queued torrents correctly
+	if sort == "priority" {
+		sm.sortTorrentsByPriority(filteredTorrents, order == "desc")
+	}
+
 	// Calculate stats from filtered torrents
 	stats := sm.calculateStats(filteredTorrents)
 
@@ -310,6 +315,45 @@ func (sm *SyncManager) GetTorrentsWithFilters(ctx context.Context, instanceID in
 		Msg("Fresh torrent data fetched and cached")
 
 	return response, nil
+}
+
+// sortTorrentsByPriority sorts torrents by priority with proper queue handling
+// Order: Queued torrents (Q1, Q2, Q3...) → Torrents with priority set → Torrents with no priority (-)
+func (sm *SyncManager) sortTorrentsByPriority(torrents []qbt.Torrent, descending bool) {
+	slices.SortFunc(torrents, func(a, b qbt.Torrent) int {
+		// Categorize torrents for clear sorting logic
+		aIsQueued := a.State == "queuedDL" || a.State == "queuedUP"
+		bIsQueued := b.State == "queuedDL" || b.State == "queuedUP"
+		aHasPriority := a.Priority > 0 && !aIsQueued
+		bHasPriority := b.Priority > 0 && !bIsQueued
+
+		// Primary sort: Queued → Priority set → No priority
+		if aIsQueued != bIsQueued {
+			if aIsQueued {
+				return -1
+			}
+			return 1
+		}
+		if aHasPriority != bHasPriority {
+			if aHasPriority {
+				return -1
+			}
+			return 1
+		}
+
+		// Secondary sort: within same category, by priority value
+		// No sorting needed for torrents without priority (both are priority=0)
+		if !aIsQueued && !aHasPriority {
+			return 0
+		}
+
+		// Sort by priority value with direction
+		diff := int(a.Priority - b.Priority)
+		if descending {
+			return -diff
+		}
+		return diff
+	})
 }
 
 // BulkAction performs bulk operations on torrents
