@@ -9,6 +9,8 @@ import type {
   Category,
   InstanceFormData,
   InstanceResponse,
+  RacingDashboard,
+  RacingDashboardOptions,
   TorrentResponse,
   User
 } from "@/types"
@@ -437,6 +439,38 @@ class ApiClient {
     return this.request<{ enabled: boolean }>(`/instances/${instanceId}/alternative-speed-limits/toggle`, {
       method: "POST",
     })
+  }
+
+  // Racing Dashboard endpoint
+  async getRacingDashboard(
+    instanceId: number,
+    options?: RacingDashboardOptions
+  ): Promise<RacingDashboard> {
+    const searchParams = new URLSearchParams()
+
+    if (options?.limit !== undefined) {
+      searchParams.set("limit", options.limit.toString())
+    }
+    if (options?.trackerFilter && options.trackerFilter.length > 0) {
+      searchParams.set("trackers", options.trackerFilter.join(","))
+    }
+    if (options?.minRatio !== undefined) {
+      searchParams.set("minRatio", options.minRatio.toString())
+    }
+    if (options?.minSize !== undefined) {
+      searchParams.set("minSize", options.minSize.toString())
+    }
+    if (options?.maxSize !== undefined) {
+      searchParams.set("maxSize", options.maxSize.toString())
+    }
+    if (options?.categoryFilter && options.categoryFilter.length > 0) {
+      searchParams.set("categories", options.categoryFilter.join(","))
+    }
+
+    const queryString = searchParams.toString()
+    const url = queryString? `/instances/${instanceId}/torrents/racing?${queryString}`: `/instances/${instanceId}/torrents/racing`
+
+    return this.request<RacingDashboard>(url)
   }
 }
 

@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { Link, useLocation } from "@tanstack/react-router"
 import {
+  Activity,
   Github,
   HardDrive,
   Home,
@@ -33,6 +34,11 @@ const navigation: NavItem[] = [
     title: "Dashboard",
     href: "/dashboard",
     icon: Home,
+  },
+  {
+    title: "Racing Dashboard",
+    href: "/racing",
+    icon: Activity,
   },
   {
     title: "Instances",
