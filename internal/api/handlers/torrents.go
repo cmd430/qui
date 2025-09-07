@@ -788,3 +788,68 @@ func (h *TorrentsHandler) GetTorrentFiles(w http.ResponseWriter, r *http.Request
 
 	RespondJSON(w, http.StatusOK, files)
 }
+
+// GetRacingDashboard returns racing dashboard data for an instance
+func (h *TorrentsHandler) GetRacingDashboard(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	// Parse query parameters for options
+	options := qbittorrent.RacingDashboardOptions{
+		Limit: 5, // Default limit
+	}
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit <= 50 {
+			options.Limit = limit
+		}
+	}
+
+	if trackersStr := r.URL.Query().Get("trackers"); trackersStr != "" {
+		options.TrackerFilter = strings.Split(trackersStr, ",")
+		// Trim spaces
+		for i, tracker := range options.TrackerFilter {
+			options.TrackerFilter[i] = strings.TrimSpace(tracker)
+		}
+	}
+
+	if minRatioStr := r.URL.Query().Get("minRatio"); minRatioStr != "" {
+		if minRatio, err := strconv.ParseFloat(minRatioStr, 64); err == nil && minRatio >= 0 {
+			options.MinRatio = minRatio
+		}
+	}
+
+	if minSizeStr := r.URL.Query().Get("minSize"); minSizeStr != "" {
+		if minSize, err := strconv.ParseInt(minSizeStr, 10, 64); err == nil && minSize >= 0 {
+			options.MinSize = minSize
+		}
+	}
+
+	if maxSizeStr := r.URL.Query().Get("maxSize"); maxSizeStr != "" {
+		if maxSize, err := strconv.ParseInt(maxSizeStr, 10, 64); err == nil && maxSize >= 0 {
+			options.MaxSize = maxSize
+		}
+	}
+
+	if categoriesStr := r.URL.Query().Get("categories"); categoriesStr != "" {
+		options.CategoryFilter = strings.Split(categoriesStr, ",")
+		// Trim spaces
+		for i, category := range options.CategoryFilter {
+			options.CategoryFilter[i] = strings.TrimSpace(category)
+		}
+	}
+
+	// Get racing dashboard data
+	dashboard, err := h.syncManager.GetRacingDashboard(r.Context(), instanceID, options)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get racing dashboard")
+		RespondError(w, http.StatusInternalServerError, "Failed to get racing dashboard")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, dashboard)
+}
