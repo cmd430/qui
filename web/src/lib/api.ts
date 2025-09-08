@@ -7,6 +7,9 @@ import type {
   AppPreferences,
   AuthResponse,
   Category,
+  EconomyAnalysis,
+  EconomyScore,
+  EconomyStats,
   InstanceFormData,
   InstanceResponse,
   TorrentResponse,
@@ -437,6 +440,24 @@ class ApiClient {
     return this.request<{ enabled: boolean }>(`/instances/${instanceId}/alternative-speed-limits/toggle`, {
       method: "POST",
     })
+  }
+
+  // Economy endpoints
+  async getEconomyAnalysis(instanceId: number): Promise<EconomyAnalysis> {
+    return this.request<EconomyAnalysis>(`/instances/${instanceId}/torrents/economy`)
+  }
+
+  async getEconomyStats(instanceId: number): Promise<EconomyStats> {
+    return this.request<EconomyStats>(`/instances/${instanceId}/torrents/economy/stats`)
+  }
+
+  async getTopValuableTorrents(instanceId: number, limit?: number): Promise<EconomyScore[]> {
+    const searchParams = new URLSearchParams()
+    if (limit) searchParams.set("limit", limit.toString())
+
+    return this.request<EconomyScore[]>(
+      `/instances/${instanceId}/torrents/economy/top-valuable?${searchParams}`
+    )
   }
 }
 

@@ -398,3 +398,40 @@ export interface AppPreferences {
   // Add catch-all for any additional fields from the API
   [key: string]: unknown
 }
+
+// Economy-related types
+export interface EconomyScore {
+  hash: string
+  name: string
+  size: number
+  seeds: number
+  peers: number
+  ratio: number
+  age: number
+  economyScore: number
+  storageValue: number
+  rarityBonus: number
+  deduplicationFactor: number
+  duplicates?: string[]
+  tracker: string
+  state: string
+  category: string
+}
+
+export interface EconomyStats {
+  totalTorrents: number
+  totalStorage: number
+  deduplicatedStorage: number
+  storageSavings: number
+  averageEconomyScore: number
+  highValueTorrents: number
+  rareContentCount: number
+  wellSeededOldContent: number
+}
+
+export interface EconomyAnalysis {
+  scores: EconomyScore[]
+  stats: EconomyStats
+  topValuable: EconomyScore[]
+  duplicates: Record<string, string[]>
+}

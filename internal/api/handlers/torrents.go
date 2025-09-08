@@ -788,3 +788,71 @@ func (h *TorrentsHandler) GetTorrentFiles(w http.ResponseWriter, r *http.Request
 
 	RespondJSON(w, http.StatusOK, files)
 }
+
+// GetEconomyAnalysis returns the complete economy analysis for an instance
+func (h *TorrentsHandler) GetEconomyAnalysis(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	// Get economy analysis
+	analysis, err := h.syncManager.GetEconomyAnalysis(r.Context(), instanceID)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get economy analysis")
+		RespondError(w, http.StatusInternalServerError, "Failed to get economy analysis")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, analysis)
+}
+
+// GetEconomyStats returns aggregated economy statistics for an instance
+func (h *TorrentsHandler) GetEconomyStats(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	// Get economy stats
+	stats, err := h.syncManager.GetEconomyStats(r.Context(), instanceID)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get economy stats")
+		RespondError(w, http.StatusInternalServerError, "Failed to get economy stats")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, stats)
+}
+
+// GetTopValuableTorrents returns the most valuable torrents by economy score
+func (h *TorrentsHandler) GetTopValuableTorrents(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	// Parse limit parameter
+	limit := 20 // Default limit
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+
+	// Get top valuable torrents
+	torrents, err := h.syncManager.GetTopValuableTorrents(r.Context(), instanceID, limit)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get top valuable torrents")
+		RespondError(w, http.StatusInternalServerError, "Failed to get top valuable torrents")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, torrents)
+}
