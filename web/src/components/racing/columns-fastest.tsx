@@ -149,7 +149,7 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
     },
     cell: ({ row }) => {
       const completionTime = row.getValue<number | undefined>("completionTime")
-      return completionTime ? (
+      return completionTime !== undefined && completionTime !== null ? (
         <div className="flex items-center gap-1 pointer-events-none">
           <Clock className="h-3 w-3" />
           {formatDuration(completionTime)}

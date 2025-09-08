@@ -187,7 +187,7 @@ func (rm *RacingManager) convertToRacingTorrentsWithInstance(torrents []qbt.Torr
 			*racingTorrent.CompletedOn = time.Unix(torrent.CompletionOn, 0)
 
 			// Calculate time to complete
-			if torrent.CompletionOn > torrent.AddedOn {
+			if torrent.CompletionOn >= torrent.AddedOn {
 				completionTime := torrent.CompletionOn - torrent.AddedOn
 				racingTorrent.CompletionTime = &completionTime
 			}
@@ -244,7 +244,7 @@ func (rm *RacingManager) convertToRacingTorrents(torrents []qbt.Torrent, options
 			*racingTorrent.CompletedOn = time.Unix(torrent.CompletionOn, 0)
 
 			// Calculate time to complete
-			if torrent.CompletionOn > torrent.AddedOn {
+			if torrent.CompletionOn >= torrent.AddedOn {
 				completionTime := torrent.CompletionOn - torrent.AddedOn
 				racingTorrent.CompletionTime = &completionTime
 			}
@@ -376,7 +376,6 @@ func (rm *RacingManager) calculateTrackerStats(torrents []RacingTorrent) Tracker
 
 	totalRatio := 0.0
 	totalCompletionTime := int64(0)
-	completedCount := 0
 
 	for _, torrent := range torrents {
 		stats.TotalTorrents++
@@ -410,10 +409,12 @@ func (rm *RacingManager) calculateTrackerStats(torrents []RacingTorrent) Tracker
 			stats.CompletedTorrents++
 			trackerData.CompletedTorrents++
 			totalCompletionTime += *torrent.CompletionTime
-			trackerData.AverageCompletionTime = new(int64)
-			if trackerData.AverageCompletionTime != nil {
-				*trackerData.AverageCompletionTime += *torrent.CompletionTime
+
+			// Initialize if needed, then accumulate
+			if trackerData.AverageCompletionTime == nil {
+				trackerData.AverageCompletionTime = new(int64)
 			}
+			*trackerData.AverageCompletionTime += *torrent.CompletionTime
 		}
 
 		stats.ByTracker[compositeKey] = trackerData
@@ -424,8 +425,8 @@ func (rm *RacingManager) calculateTrackerStats(torrents []RacingTorrent) Tracker
 		stats.AverageRatio = totalRatio / float64(stats.TotalTorrents)
 	}
 
-	if completedCount > 0 {
-		avgTime := totalCompletionTime / int64(completedCount)
+	if stats.CompletedTorrents > 0 {
+		avgTime := totalCompletionTime / int64(stats.CompletedTorrents)
 		stats.AverageCompletionTime = &avgTime
 	}
 

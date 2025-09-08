@@ -135,7 +135,7 @@ export const columnsTrackerStats: ColumnDef<TrackerStatRow>[] = [
     },
     cell: ({ row }) => {
       const time = row.getValue<number | undefined>("averageCompletionTime")
-      return time ? (
+      return time !== undefined && time !== null ? (
         <span className="font-medium">{formatDuration(time)}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
