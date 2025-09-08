@@ -22,6 +22,8 @@ export interface TrackerStatRow {
   completedTorrents: number
   averageRatio: number
   averageCompletionTime?: number
+  instanceId: number
+  instanceName: string
 }
 
 export const columnsTrackerStats: ColumnDef<TrackerStatRow>[] = [
@@ -43,6 +45,17 @@ export const columnsTrackerStats: ColumnDef<TrackerStatRow>[] = [
       return (
         <span className="text-sm font-medium">
           {row.getValue("tracker")}
+        </span>
+      )
+    },
+  },
+  {
+    accessorKey: "instanceName",
+    header: "Instance",
+    cell: ({ row }) => {
+      return (
+        <span className="text-sm text-muted-foreground">
+          {row.getValue("instanceName")}
         </span>
       )
     },

@@ -575,8 +575,8 @@ func (sm *SyncManager) getDomainFromTracker(trackerStr string) string {
 	}
 
 	// Handle multiple trackers separated by newlines or commas
-	trackerStrings := strings.Split(trackerStr, "\n")
-	for _, ts := range trackerStrings {
+	trackerStrings := strings.SplitSeq(trackerStr, "\n")
+	for ts := range trackerStrings {
 		ts = strings.TrimSpace(ts)
 		if ts == "" {
 			continue
@@ -1178,9 +1178,9 @@ func (sm *SyncManager) applyManualFilters(torrents []qbt.Torrent, filters Filter
 			} else {
 				// Extract tracker domains from torrent
 				var trackerDomains []string
-				trackerStrings := strings.Split(torrent.Tracker, "\n")
+				trackerStrings := strings.SplitSeq(torrent.Tracker, "\n")
 
-				for _, trackerStr := range trackerStrings {
+				for trackerStr := range trackerStrings {
 					trackerStr = strings.TrimSpace(trackerStr)
 					if trackerStr == "" {
 						continue
@@ -1749,8 +1749,27 @@ func (sm *SyncManager) SetTorrentDownloadLimit(ctx context.Context, instanceID i
 	return nil
 }
 
-// GetRacingDashboard returns the racing dashboard data for an instance
+// GetRacingDashboard returns the racing dashboard data for multiple instances
 func (sm *SyncManager) GetRacingDashboard(ctx context.Context, instanceID int, options RacingDashboardOptions) (*RacingDashboard, error) {
+	// For backward compatibility, if instanceID is provided but options.InstanceIDs is empty,
+	// use the instanceID
+	if instanceID > 0 && len(options.InstanceIDs) == 0 {
+		options.InstanceIDs = []int{instanceID}
+	}
+
+	// Use the RacingManager to generate the dashboard
+	rm := NewRacingManager(sm)
+	return rm.GetRacingDashboard(ctx, options)
+}
+
+// GetRacingDashboardMulti returns the racing dashboard data for multiple instances (new method)
+func (sm *SyncManager) GetRacingDashboardMulti(ctx context.Context, options RacingDashboardOptions) (*RacingDashboard, error) {
+	rm := NewRacingManager(sm)
+	return rm.GetRacingDashboard(ctx, options)
+}
+
+// GetRacingDashboardLegacy returns the racing dashboard data for an instance (legacy implementation)
+func (sm *SyncManager) GetRacingDashboardLegacy(ctx context.Context, instanceID int, options RacingDashboardOptions) (*RacingDashboard, error) {
 	// Set defaults
 	if options.Limit == 0 {
 		options.Limit = 5
@@ -1937,13 +1956,7 @@ func (sm *SyncManager) matchesFilters(torrent qbt.Torrent, options RacingDashboa
 
 	// Category filter
 	if len(options.CategoryFilter) > 0 {
-		found := false
-		for _, category := range options.CategoryFilter {
-			if torrent.Category == category {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(options.CategoryFilter, torrent.Category)
 		if !found {
 			return false
 		}

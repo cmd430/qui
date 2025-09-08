@@ -413,6 +413,8 @@ export interface RacingTorrent {
   state: string
   category: string
   tags: string
+  instanceId: number
+  instanceName: string
 }
 
 export interface TrackerData {
@@ -420,6 +422,8 @@ export interface TrackerData {
   completedTorrents: number
   averageRatio: number
   averageCompletionTime?: number
+  instanceId: number
+  instanceName: string
 }
 
 export interface TrackerStats {
@@ -440,6 +444,7 @@ export interface RacingDashboard {
 
 export interface RacingDashboardOptions {
   limit?: number
+  instanceIds?: number[]
   trackerFilter?: string[]
   minRatio?: number
   minSize?: number

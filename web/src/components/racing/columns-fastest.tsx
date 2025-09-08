@@ -71,6 +71,18 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
     },
   },
   {
+    accessorKey: "instanceName",
+    header: "Instance",
+    cell: ({ row }) => {
+      const torrent = row.original
+      return (
+        <Badge variant="outline" className="text-xs">
+          {torrent.instanceName}
+        </Badge>
+      )
+    },
+  },
+  {
     accessorKey: "size",
     header: ({ column }) => {
       return (

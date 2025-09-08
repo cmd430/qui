@@ -20,6 +20,13 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -33,7 +40,7 @@ import type { RacingDashboardOptions } from "@/types"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { Activity, AlertCircle, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, ListFilter, Percent, RotateCcw, Settings2, Tag, TrendingDown, TrendingUp } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 
 function formatDuration(seconds: number): string {
@@ -83,31 +90,31 @@ function usePersistedRacingFiltersState(defaultOpen: boolean = true) {
 export function RacingDashboard() {
   const { instances, isLoading: instancesLoading } = useInstances()
 
-  // Initialize selectedInstanceId from localStorage
-  const [selectedInstanceId, setSelectedInstanceIdState] = useState<number | null>(() => {
+  // Initialize selectedInstanceIds from localStorage (now supporting multiple)
+  const [selectedInstanceIds, setSelectedInstanceIdsState] = useState<number[]>(() => {
     try {
-      const stored = localStorage.getItem("qui-racing-selected-instance")
+      const stored = localStorage.getItem("qui-racing-selected-instances")
       if (stored !== null) {
-        const id = parseInt(stored, 10)
-        if (!isNaN(id)) {
-          return id
+        const ids = JSON.parse(stored)
+        if (Array.isArray(ids)) {
+          return ids.filter(id => typeof id === "number")
         }
       }
     } catch (error) {
-      console.error("Failed to load selected instance from localStorage:", error)
+      console.error("Failed to load selected instances from localStorage:", error)
     }
-    return null
+    return []
   })
 
   // Wrapper to persist instance selection
-  const setSelectedInstanceId = (id: number) => {
-    setSelectedInstanceIdState(id)
+  const setSelectedInstanceIds = useCallback((ids: number[]) => {
+    setSelectedInstanceIdsState(ids)
     try {
-      localStorage.setItem("qui-racing-selected-instance", id.toString())
+      localStorage.setItem("qui-racing-selected-instances", JSON.stringify(ids))
     } catch (error) {
-      console.error("Failed to save selected instance to localStorage:", error)
+      console.error("Failed to save selected instances to localStorage:", error)
     }
-  }
+  }, [])
 
   const [options, setOptions] = useState<RacingDashboardOptions>({
     limit: DEFAULT_API_LIMIT,
@@ -126,20 +133,25 @@ export function RacingDashboard() {
   // Auto-select first instance if none selected or if selected instance doesn't exist
   useEffect(() => {
     if (instances && instances.length > 0) {
-      // Check if selected instance exists in the list
-      const instanceExists = selectedInstanceId && instances.some(inst => inst.id === selectedInstanceId)
-
-      if (!instanceExists) {
-        // Select first available instance
-        setSelectedInstanceId(instances[0].id)
+      if (selectedInstanceIds.length === 0) {
+        // Select all instances by default
+        setSelectedInstanceIds(instances.map(i => i.id))
+      } else {
+        // Filter out any non-existent instances
+        const validIds = selectedInstanceIds.filter(id =>
+          instances.some(i => i.id === id)
+        )
+        if (validIds.length !== selectedInstanceIds.length) {
+          setSelectedInstanceIds(validIds.length > 0 ? validIds : instances.map(i => i.id))
+        }
       }
     }
-  }, [instances, selectedInstanceId])
+  }, [instances, selectedInstanceIds, setSelectedInstanceIds])
 
   const { data: dashboard, isLoading, error, refetch } = useQuery({
-    queryKey: ["racing-dashboard", selectedInstanceId, options],
-    queryFn: () => api.getRacingDashboard(selectedInstanceId!, options),
-    enabled: !!selectedInstanceId,
+    queryKey: ["racing-dashboard", selectedInstanceIds, options],
+    queryFn: () => api.getRacingDashboard(null, { ...options, instanceIds: selectedInstanceIds }),
+    enabled: selectedInstanceIds.length > 0,
     refetchInterval: 30000, // Refresh every 30 seconds
     staleTime: 10000,
   })
@@ -148,13 +160,21 @@ export function RacingDashboard() {
   const trackerStatsTableData = useMemo<TrackerStatRow[]>(() => {
     if (!dashboard?.trackerStats.byTracker) return []
 
-    return Object.entries(dashboard.trackerStats.byTracker).map(([tracker, data]) => ({
-      tracker,
-      totalTorrents: data.totalTorrents,
-      completedTorrents: data.completedTorrents,
-      averageRatio: data.averageRatio,
-      averageCompletionTime: data.averageCompletionTime,
-    }))
+    return Object.entries(dashboard.trackerStats.byTracker).map(([compositeKey, data]) => {
+      // Parse the composite key format: "tracker_instanceId"
+      const lastUnderscoreIndex = compositeKey.lastIndexOf("_")
+      const tracker = lastUnderscoreIndex > 0 ? compositeKey.substring(0, lastUnderscoreIndex) : compositeKey
+
+      return {
+        tracker,
+        totalTorrents: data.totalTorrents,
+        completedTorrents: data.completedTorrents,
+        averageRatio: data.averageRatio,
+        averageCompletionTime: data.averageCompletionTime,
+        instanceId: data.instanceId || 0,
+        instanceName: data.instanceName || "Unknown",
+      }
+    })
   }, [dashboard?.trackerStats.byTracker])
 
   const handleRemoveTracker = (tracker: string) => {
@@ -272,25 +292,50 @@ export function RacingDashboard() {
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Database className="h-3 w-3 text-primary" />
-                      Instance
+                      Instances
                     </Label>
-                    <Select
-                      value={selectedInstanceId?.toString()}
-                      onValueChange={(value) => setSelectedInstanceId(Number(value))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select instance" />
-                      </SelectTrigger>
-                      <SelectContent>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between">
+                          <span className="truncate">
+                            {selectedInstanceIds.length === 0? "Select instances": selectedInstanceIds.length === instances?.length? "All instances": `${selectedInstanceIds.length} instance${selectedInstanceIds.length > 1 ? "s" : ""} selected`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent className="w-56">
+                        <DropdownMenuCheckboxItem
+                          checked={selectedInstanceIds.length === instances?.length}
+                          onCheckedChange={(checked) => {
+                            if (checked && instances) {
+                              setSelectedInstanceIds(instances.map(i => i.id))
+                            } else {
+                              setSelectedInstanceIds([])
+                            }
+                          }}
+                        >
+                          Select All
+                        </DropdownMenuCheckboxItem>
+                        <DropdownMenuSeparator />
                         {instances?.map(instance => (
-                          <SelectItem key={instance.id} value={instance.id.toString()}>
+                          <DropdownMenuCheckboxItem
+                            key={instance.id}
+                            checked={selectedInstanceIds.includes(instance.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedInstanceIds([...selectedInstanceIds, instance.id])
+                              } else {
+                                setSelectedInstanceIds(selectedInstanceIds.filter(id => id !== instance.id))
+                              }
+                            }}
+                          >
                             {instance.name}
-                          </SelectItem>
+                          </DropdownMenuCheckboxItem>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <p className="text-xs text-muted-foreground">
-                      Select the qBittorrent instance to analyze
+                      Select one or more qBittorrent instances to analyze
                     </p>
                   </div>
 

@@ -5,6 +5,8 @@ package qbittorrent
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -26,6 +28,8 @@ type RacingTorrent struct {
 	State          string     `json:"state"`
 	Category       string     `json:"category"`
 	Tags           string     `json:"tags"`
+	InstanceID     int        `json:"instanceId"`
+	InstanceName   string     `json:"instanceName"`
 }
 
 // RacingDashboard represents the complete racing dashboard data
@@ -52,11 +56,14 @@ type TrackerData struct {
 	CompletedTorrents     int     `json:"completedTorrents"`
 	AverageRatio          float64 `json:"averageRatio"`
 	AverageCompletionTime *int64  `json:"averageCompletionTime,omitempty"`
+	InstanceID            int     `json:"instanceId"`
+	InstanceName          string  `json:"instanceName"`
 }
 
 // RacingDashboardOptions represents options for the racing dashboard
 type RacingDashboardOptions struct {
 	Limit          int      `json:"limit"`          // Number of torrents to show in each category (default: 5)
+	InstanceIDs    []int    `json:"instanceIds"`    // Instance IDs to include (empty = all configured instances)
 	TrackerFilter  []string `json:"trackerFilter"`  // Filter by specific trackers (empty = all)
 	MinRatio       float64  `json:"minRatio"`       // Minimum ratio to include (default: 0)
 	MinSize        int64    `json:"minSize"`        // Minimum size in bytes (default: 0)
@@ -79,21 +86,41 @@ func NewRacingManager(syncManager *SyncManager) *RacingManager {
 	}
 }
 
-// GetRacingDashboard generates the racing dashboard data
-func (rm *RacingManager) GetRacingDashboard(ctx context.Context, instanceID int, options RacingDashboardOptions) (*RacingDashboard, error) {
+// GetRacingDashboard generates the racing dashboard data for multiple instances
+func (rm *RacingManager) GetRacingDashboard(ctx context.Context, options RacingDashboardOptions) (*RacingDashboard, error) {
 	// Set defaults
 	if options.Limit == 0 {
 		options.Limit = 5
 	}
 
-	// Get all torrents from sync manager
-	allTorrents, err := rm.syncManager.getAllTorrentsForStats(ctx, instanceID, "")
-	if err != nil {
-		return nil, err
+	// If no instances specified, use all available instances
+	instanceIDs := options.InstanceIDs
+	if len(instanceIDs) == 0 {
+		// Get all configured instance IDs from the pool
+		instanceIDs = rm.syncManager.clientPool.GetAllInstanceIDs()
 	}
 
-	// Convert to racing torrents and apply filters
-	racingTorrents := rm.convertToRacingTorrents(allTorrents, options)
+	// Collect torrents from all specified instances
+	var allRacingTorrents []RacingTorrent
+	for _, instanceID := range instanceIDs {
+		// Get instance info
+		instanceInfo, err := rm.syncManager.clientPool.GetInstanceInfo(instanceID)
+		if err != nil {
+			log.Warn().Int("instanceID", instanceID).Err(err).Msg("Failed to get instance info, skipping")
+			continue
+		}
+
+		// Get all torrents from this instance
+		torrents, err := rm.syncManager.getAllTorrentsForStats(ctx, instanceID, "")
+		if err != nil {
+			log.Warn().Int("instanceID", instanceID).Err(err).Msg("Failed to get torrents for instance, skipping")
+			continue
+		}
+
+		// Convert to racing torrents with instance info and apply filters
+		racingTorrents := rm.convertToRacingTorrentsWithInstance(torrents, options, instanceID, instanceInfo.Name)
+		allRacingTorrents = append(allRacingTorrents, racingTorrents...)
+	}
 
 	// Calculate racing metrics
 	dashboard := &RacingDashboard{
@@ -101,20 +128,20 @@ func (rm *RacingManager) GetRacingDashboard(ctx context.Context, instanceID int,
 	}
 
 	// Get top fastest completed torrents
-	dashboard.TopFastest = rm.getTopFastest(racingTorrents, options.Limit)
+	dashboard.TopFastest = rm.getTopFastest(allRacingTorrents, options.Limit)
 
 	// Get top ratios
-	dashboard.TopRatios = rm.getTopRatios(racingTorrents, options.Limit)
+	dashboard.TopRatios = rm.getTopRatios(allRacingTorrents, options.Limit)
 
 	// Get bottom ratios
-	dashboard.BottomRatios = rm.getBottomRatios(racingTorrents, options.Limit)
+	dashboard.BottomRatios = rm.getBottomRatios(allRacingTorrents, options.Limit)
 
 	// Calculate tracker statistics
-	dashboard.TrackerStats = rm.calculateTrackerStats(racingTorrents)
+	dashboard.TrackerStats = rm.calculateTrackerStats(allRacingTorrents)
 
 	log.Debug().
-		Int("instanceID", instanceID).
-		Int("totalTorrents", len(racingTorrents)).
+		Ints("instanceIDs", instanceIDs).
+		Int("totalTorrents", len(allRacingTorrents)).
 		Int("topFastest", len(dashboard.TopFastest)).
 		Int("topRatios", len(dashboard.TopRatios)).
 		Int("bottomRatios", len(dashboard.BottomRatios)).
@@ -123,7 +150,66 @@ func (rm *RacingManager) GetRacingDashboard(ctx context.Context, instanceID int,
 	return dashboard, nil
 }
 
-// convertToRacingTorrents converts qbt.Torrent to RacingTorrent with filtering
+// convertToRacingTorrentsWithInstance converts qbt.Torrent to RacingTorrent with instance info and filtering
+func (rm *RacingManager) convertToRacingTorrentsWithInstance(torrents []qbt.Torrent, options RacingDashboardOptions, instanceID int, instanceName string) []RacingTorrent {
+	var racingTorrents []RacingTorrent
+	filtered := 0
+
+	for _, torrent := range torrents {
+		// Apply filters
+		if !rm.matchesFilters(torrent, options) {
+			filtered++
+			continue
+		}
+
+		racingTorrent := RacingTorrent{
+			Hash:         torrent.Hash,
+			Name:         torrent.Name,
+			Size:         torrent.Size,
+			Tracker:      torrent.Tracker,
+			State:        string(torrent.State),
+			Category:     torrent.Category,
+			Tags:         torrent.Tags,
+			Ratio:        torrent.Ratio,
+			AddedOn:      time.Unix(torrent.AddedOn, 0),
+			InstanceID:   instanceID,
+			InstanceName: instanceName,
+		}
+
+		// Extract tracker domain
+		if torrent.Tracker != "" {
+			racingTorrent.TrackerDomain = rm.syncManager.getDomainFromTracker(torrent.Tracker)
+		}
+
+		// Calculate completion time if torrent is completed
+		if torrent.Progress == 1 && torrent.CompletionOn > 0 {
+			racingTorrent.CompletedOn = &time.Time{}
+			*racingTorrent.CompletedOn = time.Unix(torrent.CompletionOn, 0)
+
+			// Calculate time to complete
+			if torrent.CompletionOn > torrent.AddedOn {
+				completionTime := torrent.CompletionOn - torrent.AddedOn
+				racingTorrent.CompletionTime = &completionTime
+			}
+		}
+
+		racingTorrents = append(racingTorrents, racingTorrent)
+	}
+
+	if options.TimeRange != "" {
+		log.Debug().
+			Int("instanceID", instanceID).
+			Int("totalTorrents", len(torrents)).
+			Int("filtered", filtered).
+			Int("remaining", len(racingTorrents)).
+			Str("timeRange", options.TimeRange).
+			Msg("RACING TIME FILTER APPLIED")
+	}
+
+	return racingTorrents
+}
+
+// convertToRacingTorrents converts qbt.Torrent to RacingTorrent with filtering (backward compatibility)
 func (rm *RacingManager) convertToRacingTorrents(torrents []qbt.Torrent, options RacingDashboardOptions) []RacingTorrent {
 	var racingTorrents []RacingTorrent
 	filtered := 0
@@ -196,13 +282,7 @@ func (rm *RacingManager) matchesFilters(torrent qbt.Torrent, options RacingDashb
 
 	// Category filter
 	if len(options.CategoryFilter) > 0 {
-		found := false
-		for _, category := range options.CategoryFilter {
-			if torrent.Category == category {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(options.CategoryFilter, torrent.Category)
 		if !found {
 			return false
 		}
@@ -301,18 +381,24 @@ func (rm *RacingManager) calculateTrackerStats(torrents []RacingTorrent) Tracker
 	for _, torrent := range torrents {
 		stats.TotalTorrents++
 
-		// Use tracker domain for grouping, fallback to "Unknown"
+		// Create composite key: tracker_instanceId
 		trackerKey := torrent.TrackerDomain
 		if trackerKey == "" {
 			trackerKey = "Unknown"
 		}
 
+		// Create unique key combining tracker and instance
+		compositeKey := fmt.Sprintf("%s_%d", trackerKey, torrent.InstanceID)
+
 		// Initialize tracker data if not exists
-		if _, exists := stats.ByTracker[trackerKey]; !exists {
-			stats.ByTracker[trackerKey] = TrackerData{}
+		if _, exists := stats.ByTracker[compositeKey]; !exists {
+			stats.ByTracker[compositeKey] = TrackerData{
+				InstanceID:   torrent.InstanceID,
+				InstanceName: torrent.InstanceName,
+			}
 		}
 
-		trackerData := stats.ByTracker[trackerKey]
+		trackerData := stats.ByTracker[compositeKey]
 		trackerData.TotalTorrents++
 
 		// Track ratio
@@ -330,7 +416,7 @@ func (rm *RacingManager) calculateTrackerStats(torrents []RacingTorrent) Tracker
 			}
 		}
 
-		stats.ByTracker[trackerKey] = trackerData
+		stats.ByTracker[compositeKey] = trackerData
 	}
 
 	// Calculate averages

@@ -789,18 +789,37 @@ func (h *TorrentsHandler) GetTorrentFiles(w http.ResponseWriter, r *http.Request
 	RespondJSON(w, http.StatusOK, files)
 }
 
-// GetRacingDashboard returns racing dashboard data for an instance
+// GetRacingDashboard returns racing dashboard data for one or more instances
 func (h *TorrentsHandler) GetRacingDashboard(w http.ResponseWriter, r *http.Request) {
-	// Get instance ID from URL
-	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
-	if err != nil {
-		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
-		return
+	// Get instance ID from URL (for backward compatibility)
+	instanceIDStr := chi.URLParam(r, "instanceID")
+	var singleInstanceID int
+	if instanceIDStr != "" {
+		var err error
+		singleInstanceID, err = strconv.Atoi(instanceIDStr)
+		if err != nil {
+			RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+			return
+		}
 	}
 
 	// Parse query parameters for options
 	options := qbittorrent.RacingDashboardOptions{
 		Limit: 5, // Default limit
+	}
+
+	// Check for multiple instance IDs in query params
+	if instanceIDsStr := r.URL.Query().Get("instanceIds"); instanceIDsStr != "" {
+		instanceIDStrs := strings.SplitSeq(instanceIDsStr, ",")
+		for idStr := range instanceIDStrs {
+			id, err := strconv.Atoi(strings.TrimSpace(idStr))
+			if err == nil && id > 0 {
+				options.InstanceIDs = append(options.InstanceIDs, id)
+			}
+		}
+	} else if singleInstanceID > 0 {
+		// Use the single instance ID from URL if no multiple IDs provided
+		options.InstanceIDs = []int{singleInstanceID}
 	}
 
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
@@ -858,9 +877,9 @@ func (h *TorrentsHandler) GetRacingDashboard(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Get racing dashboard data
-	dashboard, err := h.syncManager.GetRacingDashboard(r.Context(), instanceID, options)
+	dashboard, err := h.syncManager.GetRacingDashboard(r.Context(), singleInstanceID, options)
 	if err != nil {
-		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get racing dashboard")
+		log.Error().Err(err).Ints("instanceIDs", options.InstanceIDs).Msg("Failed to get racing dashboard")
 		RespondError(w, http.StatusInternalServerError, "Failed to get racing dashboard")
 		return
 	}

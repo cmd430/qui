@@ -443,10 +443,15 @@ class ApiClient {
 
   // Racing Dashboard endpoint
   async getRacingDashboard(
-    instanceId: number,
+    instanceId: number | null,
     options?: RacingDashboardOptions
   ): Promise<RacingDashboard> {
     const searchParams = new URLSearchParams()
+
+    // Handle multiple instance IDs
+    if (options?.instanceIds && options.instanceIds.length > 0) {
+      searchParams.set("instanceIds", options.instanceIds.join(","))
+    }
 
     if (options?.limit !== undefined) {
       searchParams.set("limit", options.limit.toString())
@@ -477,7 +482,10 @@ class ApiClient {
     }
 
     const queryString = searchParams.toString()
-    const url = queryString? `/instances/${instanceId}/torrents/racing?${queryString}`: `/instances/${instanceId}/torrents/racing`
+
+    // If instanceId is provided (backward compatibility), use it in the URL
+    // Otherwise, rely on instanceIds in the query params
+    const url = instanceId? (queryString ? `/instances/${instanceId}/torrents/racing?${queryString}` : `/instances/${instanceId}/torrents/racing`): `/instances/0/torrents/racing?${queryString}`
 
     return this.request<RacingDashboard>(url)
   }
