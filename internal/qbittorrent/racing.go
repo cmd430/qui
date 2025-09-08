@@ -209,62 +209,6 @@ func (rm *RacingManager) convertToRacingTorrentsWithInstance(torrents []qbt.Torr
 	return racingTorrents
 }
 
-// convertToRacingTorrents converts qbt.Torrent to RacingTorrent with filtering (backward compatibility)
-func (rm *RacingManager) convertToRacingTorrents(torrents []qbt.Torrent, options RacingDashboardOptions) []RacingTorrent {
-	var racingTorrents []RacingTorrent
-	filtered := 0
-
-	for _, torrent := range torrents {
-		// Apply filters
-		if !rm.matchesFilters(torrent, options) {
-			filtered++
-			continue
-		}
-
-		racingTorrent := RacingTorrent{
-			Hash:     torrent.Hash,
-			Name:     torrent.Name,
-			Size:     torrent.Size,
-			Tracker:  torrent.Tracker,
-			State:    string(torrent.State),
-			Category: torrent.Category,
-			Tags:     torrent.Tags,
-			Ratio:    torrent.Ratio,
-			AddedOn:  time.Unix(torrent.AddedOn, 0),
-		}
-
-		// Extract tracker domain
-		if torrent.Tracker != "" {
-			racingTorrent.TrackerDomain = rm.syncManager.getDomainFromTracker(torrent.Tracker)
-		}
-
-		// Calculate completion time if torrent is completed
-		if torrent.Progress == 1 && torrent.CompletionOn > 0 {
-			racingTorrent.CompletedOn = &time.Time{}
-			*racingTorrent.CompletedOn = time.Unix(torrent.CompletionOn, 0)
-
-			// Calculate time to complete
-			if torrent.CompletionOn >= torrent.AddedOn {
-				completionTime := torrent.CompletionOn - torrent.AddedOn
-				racingTorrent.CompletionTime = &completionTime
-			}
-		}
-
-		racingTorrents = append(racingTorrents, racingTorrent)
-	}
-
-	if options.TimeRange != "" {
-		log.Info().
-			Int("totalTorrents", len(torrents)).
-			Int("filtered", filtered).
-			Int("remaining", len(racingTorrents)).
-			Str("timeRange", options.TimeRange).
-			Msg("RACING TIME FILTER APPLIED")
-	}
-
-	return racingTorrents
-}
-
 // matchesFilters checks if a torrent matches the filter criteria
 func (rm *RacingManager) matchesFilters(torrent qbt.Torrent, options RacingDashboardOptions) bool {
 	// Size filters
@@ -442,4 +386,105 @@ func (rm *RacingManager) calculateTrackerStats(torrents []RacingTorrent) Tracker
 	}
 
 	return stats
+}
+
+// matchesTimeFilter checks if a torrent matches the time filter criteria
+func matchesTimeFilter(torrent qbt.Torrent, options RacingDashboardOptions) bool {
+	// Time filtering
+	now := time.Now()
+
+	// Handle preset time ranges
+	if options.TimeRange != "" {
+		var startTime time.Time
+		switch options.TimeRange {
+		case "24h":
+			startTime = now.Add(-24 * time.Hour)
+		case "7d":
+			startTime = now.Add(-7 * 24 * time.Hour)
+		case "30d":
+			startTime = now.Add(-30 * 24 * time.Hour)
+		default:
+			// Invalid time range, ignore - pass through
+			return true
+		}
+
+		if !startTime.IsZero() {
+			// For completed torrents, filter by completion date
+			// For non-completed torrents, filter by added date
+			if torrent.CompletionOn > 0 {
+				completedTime := time.Unix(torrent.CompletionOn, 0)
+				if completedTime.Before(startTime) {
+					return false
+				}
+			} else {
+				addedTime := time.Unix(torrent.AddedOn, 0)
+				if addedTime.Before(startTime) {
+					return false
+				}
+			}
+		}
+	}
+
+	// Handle custom date range
+	if options.StartDate != "" || options.EndDate != "" {
+		var startDate, endDate time.Time
+		var startErr, endErr error
+
+		if options.StartDate != "" {
+			startDate, startErr = time.Parse(time.RFC3339, options.StartDate)
+		}
+
+		if options.EndDate != "" {
+			endDate, endErr = time.Parse(time.RFC3339, options.EndDate)
+			if endErr == nil {
+				// Add 23:59:59 to end date to include the full day
+				endDate = endDate.Add(24*time.Hour - time.Second)
+			}
+		}
+
+		// Determine which timestamp to check based on completion status
+		var checkTime time.Time
+		if torrent.CompletionOn > 0 {
+			// For completed torrents, use completion date
+			checkTime = time.Unix(torrent.CompletionOn, 0)
+		} else {
+			// For non-completed torrents, use added date
+			checkTime = time.Unix(torrent.AddedOn, 0)
+		}
+
+		// Check against start date
+		if startErr == nil && !startDate.IsZero() {
+			if checkTime.Before(startDate) {
+				return false
+			}
+		}
+
+		// Check against end date
+		if endErr == nil && !endDate.IsZero() {
+			if checkTime.After(endDate) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// GetRacingDashboard returns the racing dashboard data for multiple instances
+func (sm *SyncManager) GetRacingDashboard(ctx context.Context, instanceID int, options RacingDashboardOptions) (*RacingDashboard, error) {
+	// For backward compatibility, if instanceID is provided but options.InstanceIDs is empty,
+	// use the instanceID
+	if instanceID > 0 && len(options.InstanceIDs) == 0 {
+		options.InstanceIDs = []int{instanceID}
+	}
+
+	// Use the RacingManager to generate the dashboard
+	rm := NewRacingManager(sm)
+	return rm.GetRacingDashboard(ctx, options)
+}
+
+// GetRacingDashboardMulti returns the racing dashboard data for multiple instances (new method)
+func (sm *SyncManager) GetRacingDashboardMulti(ctx context.Context, options RacingDashboardOptions) (*RacingDashboard, error) {
+	rm := NewRacingManager(sm)
+	return rm.GetRacingDashboard(ctx, options)
 }
