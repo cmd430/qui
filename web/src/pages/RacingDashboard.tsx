@@ -5,6 +5,8 @@
 
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { format } from "date-fns"
+import type { DateRange } from "react-day-picker"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
@@ -13,11 +15,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { api } from "@/lib/api"
-import { formatBytes, getRatioColor } from "@/lib/utils"
+import { formatBytes, getRatioColor, cn } from "@/lib/utils"
 import { useInstances } from "@/hooks/useInstances"
 import type { RacingDashboardOptions, RacingTorrent } from "@/types"
-import { AlertCircle, Clock, TrendingDown, TrendingUp, Activity, Filter, RotateCcw } from "lucide-react"
+import { AlertCircle, Clock, TrendingDown, TrendingUp, Activity, Filter, RotateCcw, CalendarIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -116,6 +120,7 @@ export function RacingDashboard() {
   })
   const [categoryInput, setCategoryInput] = useState("")
   const [customDateRange, setCustomDateRange] = useState(false)
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
 
   // Auto-select first instance if none selected
   if (!selectedInstanceId && instances && instances.length > 0) {
@@ -341,26 +346,77 @@ export function RacingDashboard() {
               {customDateRange && (
                 <div className="space-y-2">
                   <Label>Date Range</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="date"
-                      value={options.startDate ? options.startDate.split("T")[0] : ""}
-                      onChange={(e) => setOptions(prev => ({
-                        ...prev,
-                        startDate: e.target.value ? new Date(e.target.value).toISOString() : "",
-                      }))}
-                      placeholder="Start Date"
-                    />
-                    <Input
-                      type="date"
-                      value={options.endDate ? options.endDate.split("T")[0] : ""}
-                      onChange={(e) => setOptions(prev => ({
-                        ...prev,
-                        endDate: e.target.value ? new Date(e.target.value).toISOString() : "",
-                      }))}
-                      placeholder="End Date"
-                    />
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dateRange && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon />
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>
+                              {format(dateRange.from, "LLL dd, y")} -{" "}
+                              {format(dateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(dateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>Pick a date range</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={(newRange: DateRange | undefined) => {
+                          setDateRange(newRange)
+                          if (newRange?.from && newRange?.to) {
+                            setOptions(prev => ({
+                              ...prev,
+                              startDate: newRange.from?.toISOString() || "",
+                              endDate: newRange.to?.toISOString() || "",
+                            }))
+                          }
+                        }}
+                        numberOfMonths={2}
+                        className="rounded-md border p-3"
+                        classNames={{
+                          months: "flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0 relative",
+                          month: "space-y-4",
+                          caption: "flex justify-center pt-1 relative items-center px-10",
+                          caption_label: "text-sm font-medium",
+                          nav: "absolute inset-x-0 top-0 flex w-full items-center justify-between",
+                          nav_button: cn(
+                            "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+                          ),
+                          nav_button_previous: "absolute left-1",
+                          nav_button_next: "absolute right-1",
+                          table: "w-full border-collapse space-y-1",
+                          head_row: "flex",
+                          head_cell: "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]",
+                          row: "flex w-full mt-2",
+                          cell: "relative h-8 w-8 text-center text-sm p-0 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
+                          day: cn(
+                            "h-8 w-8 p-0 font-normal aria-selected:opacity-100"
+                          ),
+                          day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                          day_today: "bg-accent text-accent-foreground",
+                          day_outside: "text-muted-foreground opacity-50",
+                          day_disabled: "text-muted-foreground opacity-50",
+                          day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+                          day_hidden: "invisible",
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
             </div>
@@ -423,7 +479,7 @@ export function RacingDashboard() {
                 placeholder="e.g., movies"
                 value={categoryInput}
                 onChange={(e) => setCategoryInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleAddCategory()}
+                onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
               />
               <Button onClick={handleAddCategory} size="sm">Add</Button>
             </div>
@@ -574,7 +630,7 @@ export function RacingDashboard() {
                     <p className="text-sm text-muted-foreground">
                       Torrents that completed in the shortest time
                     </p>
-                    {dashboard.topFastest.length > 0 ? (
+                    {dashboard.topFastest && dashboard.topFastest.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -603,7 +659,7 @@ export function RacingDashboard() {
                     <p className="text-sm text-muted-foreground">
                       Torrents with the highest upload ratios
                     </p>
-                    {dashboard.topRatios.length > 0 ? (
+                    {dashboard.topRatios && dashboard.topRatios.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -631,7 +687,7 @@ export function RacingDashboard() {
                     <p className="text-sm text-muted-foreground">
                       Torrents with the lowest upload ratios
                     </p>
-                    {dashboard.bottomRatios.length > 0 ? (
+                    {dashboard.bottomRatios && dashboard.bottomRatios.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
