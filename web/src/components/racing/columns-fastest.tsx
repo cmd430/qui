@@ -48,7 +48,7 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
         <div className="max-w-[300px]">
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="truncate font-medium">{torrent.name}</div>
+              <div className="truncate font-medium cursor-default">{torrent.name}</div>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[400px]">
               <p className="break-words">{torrent.name}</p>
@@ -56,12 +56,12 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
           </Tooltip>
           <div className="flex gap-2 mt-1">
             {torrent.category && (
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-xs pointer-events-none">
                 {torrent.category}
               </Badge>
             )}
             {torrent.tags && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs pointer-events-none">
                 {torrent.tags}
               </Badge>
             )}
@@ -92,16 +92,9 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
     cell: ({ row }) => {
       const torrent = row.original
       return (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="cursor-help text-sm">
-              {torrent.trackerDomain}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="text-xs">{torrent.tracker}</p>
-          </TooltipContent>
-        </Tooltip>
+        <span className="text-sm pointer-events-none">
+          {torrent.trackerDomain}
+        </span>
       )
     },
   },
@@ -122,7 +115,7 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
     cell: ({ row }) => {
       const ratio = row.getValue<number>("ratio")
       return (
-        <span className={`font-semibold ${getRatioColor(ratio)}`}>
+        <span className={`font-semibold pointer-events-none ${getRatioColor(ratio)}`}>
           {ratio.toFixed(2)}
         </span>
       )
@@ -145,12 +138,12 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
     cell: ({ row }) => {
       const completionTime = row.getValue<number | undefined>("completionTime")
       return completionTime ? (
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 pointer-events-none">
           <Clock className="h-3 w-3" />
           {formatDuration(completionTime)}
         </div>
       ) : (
-        <span className="text-muted-foreground">-</span>
+        <span className="text-muted-foreground pointer-events-none">-</span>
       )
     },
   },
@@ -171,7 +164,7 @@ export const columnsFastest: ColumnDef<RacingTorrent>[] = [
     cell: ({ row }) => {
       const torrent = row.original
       return (
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground pointer-events-none">
           <div>{formatDate(torrent.addedOn)}</div>
           {torrent.completedOn && (
             <div className="text-green-600 dark:text-green-400">
