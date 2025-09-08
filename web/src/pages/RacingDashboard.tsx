@@ -12,20 +12,28 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useInstances } from "@/hooks/useInstances"
 import { api } from "@/lib/api"
-import { cn, formatBytes, getRatioColor } from "@/lib/utils"
-import type { RacingDashboardOptions, RacingTorrent } from "@/types"
+import { cn } from "@/lib/utils"
+import type { RacingDashboardOptions } from "@/types"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { Activity, AlertCircle, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, ListFilter, Percent, RotateCcw, Settings2, Tag, TrendingDown, TrendingUp } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { DataTable } from "@/components/racing/data-table"
+import { columnsFastest } from "@/components/racing/columns-fastest"
+import { columnsRatios } from "@/components/racing/columns-ratios"
+import { columnsTrackerStats } from "@/components/racing/columns-tracker-stats"
+import type { TrackerStatRow } from "@/components/racing/columns-tracker-stats"
+import {
+  DEFAULT_API_LIMIT,
+  API_LIMIT_OPTIONS,
+  DEFAULT_TORRENTS_PAGE_SIZE,
+  DEFAULT_TRACKER_STATS_PAGE_SIZE
+} from "@/components/racing/constants"
 import type { DateRange } from "react-day-picker"
 
 function formatDuration(seconds: number): string {
@@ -40,72 +48,6 @@ function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleString()
 }
 
-function TorrentRow({ torrent, showCompletionTime = false }: { torrent: RacingTorrent, showCompletionTime?: boolean }) {
-  return (
-    <TableRow>
-      <TableCell className="max-w-[300px]">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="truncate font-medium">{torrent.name}</div>
-          </TooltipTrigger>
-          <TooltipContent side="top" className="max-w-[400px]">
-            <p className="break-words">{torrent.name}</p>
-          </TooltipContent>
-        </Tooltip>
-        <div className="flex gap-2 mt-1">
-          {torrent.category && (
-            <Badge variant="outline" className="text-xs">
-              {torrent.category}
-            </Badge>
-          )}
-          {torrent.tags && (
-            <Badge variant="secondary" className="text-xs">
-              {torrent.tags}
-            </Badge>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>{formatBytes(torrent.size)}</TableCell>
-      <TableCell>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge variant="outline" className="cursor-help">
-              {torrent.trackerDomain}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="text-xs">{torrent.tracker}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TableCell>
-      <TableCell>
-        <span className={`font-semibold ${getRatioColor(torrent.ratio)}`}>
-          {torrent.ratio.toFixed(2)}
-        </span>
-      </TableCell>
-      {showCompletionTime && (
-        <TableCell>
-          {torrent.completionTime ? (
-            <div className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {formatDuration(torrent.completionTime)}
-            </div>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          )}
-        </TableCell>
-      )}
-      <TableCell className="text-xs text-muted-foreground">
-        <div>{formatDate(torrent.addedOn)}</div>
-        {torrent.completedOn && (
-          <div className="text-green-600 dark:text-green-400">
-            Completed: {formatDate(torrent.completedOn)}
-          </div>
-        )}
-      </TableCell>
-    </TableRow>
-  )
-}
 
 // Custom hook for persisting Racing Dashboard filters state
 function usePersistedRacingFiltersState(defaultOpen: boolean = true) {
@@ -168,7 +110,7 @@ export function RacingDashboard() {
   }
 
   const [options, setOptions] = useState<RacingDashboardOptions>({
-    limit: 5,
+    limit: DEFAULT_API_LIMIT,
     trackerFilter: [],
     categoryFilter: [],
     minRatio: 0,
@@ -202,6 +144,19 @@ export function RacingDashboard() {
     staleTime: 10000,
   })
 
+  // Transform tracker stats to table data
+  const trackerStatsTableData = useMemo<TrackerStatRow[]>(() => {
+    if (!dashboard?.trackerStats.byTracker) return []
+
+    return Object.entries(dashboard.trackerStats.byTracker).map(([tracker, data]) => ({
+      tracker,
+      totalTorrents: data.totalTorrents,
+      completedTorrents: data.completedTorrents,
+      averageRatio: data.averageRatio,
+      averageCompletionTime: data.averageCompletionTime,
+    }))
+  }, [dashboard?.trackerStats.byTracker])
+
   const handleRemoveTracker = (tracker: string) => {
     setOptions(prev => ({
       ...prev,
@@ -228,7 +183,7 @@ export function RacingDashboard() {
 
   const resetFilters = () => {
     setOptions({
-      limit: 5,
+      limit: DEFAULT_API_LIMIT,
       trackerFilter: [],
       categoryFilter: [],
       minRatio: 0,
@@ -353,12 +308,11 @@ export function RacingDashboard() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="5">5 torrents</SelectItem>
-                        <SelectItem value="10">10 torrents</SelectItem>
-                        <SelectItem value="15">15 torrents</SelectItem>
-                        <SelectItem value="20">20 torrents</SelectItem>
-                        <SelectItem value="25">25 torrents</SelectItem>
-                        <SelectItem value="50">50 torrents</SelectItem>
+                        {API_LIMIT_OPTIONS.map(limit => (
+                          <SelectItem key={limit} value={limit.toString()}>
+                            {limit} torrents
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
@@ -743,23 +697,14 @@ export function RacingDashboard() {
                       Torrents that completed in the shortest time
                     </p>
                     {dashboard.topFastest && dashboard.topFastest.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Size</TableHead>
-                            <TableHead>Tracker</TableHead>
-                            <TableHead>Ratio</TableHead>
-                            <TableHead>Time</TableHead>
-                            <TableHead>Date</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dashboard.topFastest.map(torrent => (
-                            <TorrentRow key={torrent.hash} torrent={torrent} showCompletionTime={true} />
-                          ))}
-                        </TableBody>
-                      </Table>
+                      <DataTable
+                        columns={columnsFastest}
+                        data={dashboard.topFastest}
+                        searchColumn="name"
+                        searchPlaceholder="Search torrents..."
+                        pageSize={DEFAULT_TORRENTS_PAGE_SIZE}
+                        showPagination={true}
+                      />
                     ) : (
                       <p className="text-center text-muted-foreground py-8">No data available</p>
                     )}
@@ -772,22 +717,14 @@ export function RacingDashboard() {
                       Torrents with the highest upload ratios
                     </p>
                     {dashboard.topRatios && dashboard.topRatios.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Size</TableHead>
-                            <TableHead>Tracker</TableHead>
-                            <TableHead>Ratio</TableHead>
-                            <TableHead>Date</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dashboard.topRatios.map(torrent => (
-                            <TorrentRow key={torrent.hash} torrent={torrent} />
-                          ))}
-                        </TableBody>
-                      </Table>
+                      <DataTable
+                        columns={columnsRatios}
+                        data={dashboard.topRatios}
+                        searchColumn="name"
+                        searchPlaceholder="Search torrents..."
+                        pageSize={DEFAULT_TORRENTS_PAGE_SIZE}
+                        showPagination={true}
+                      />
                     ) : (
                       <p className="text-center text-muted-foreground py-8">No data available</p>
                     )}
@@ -800,22 +737,14 @@ export function RacingDashboard() {
                       Torrents with the lowest upload ratios
                     </p>
                     {dashboard.bottomRatios && dashboard.bottomRatios.length > 0 ? (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Size</TableHead>
-                            <TableHead>Tracker</TableHead>
-                            <TableHead>Ratio</TableHead>
-                            <TableHead>Date</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dashboard.bottomRatios.map(torrent => (
-                            <TorrentRow key={torrent.hash} torrent={torrent} />
-                          ))}
-                        </TableBody>
-                      </Table>
+                      <DataTable
+                        columns={columnsRatios}
+                        data={dashboard.bottomRatios}
+                        searchColumn="name"
+                        searchPlaceholder="Search torrents..."
+                        pageSize={DEFAULT_TORRENTS_PAGE_SIZE}
+                        showPagination={true}
+                      />
                     ) : (
                       <p className="text-center text-muted-foreground py-8">No data available</p>
                     )}
@@ -834,7 +763,7 @@ export function RacingDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div>
                   <div className="text-2xl font-bold">{dashboard.trackerStats.totalTorrents}</div>
                   <p className="text-xs text-muted-foreground">Total Torrents</p>
@@ -862,39 +791,13 @@ export function RacingDashboard() {
                   <Separator className="my-4" />
                   <div className="space-y-3">
                     <h4 className="text-sm font-semibold">Per Tracker Breakdown</h4>
-                    <ScrollArea className="h-[300px] pr-4">
-                      <div className="grid gap-3">
-                        {Object.entries(dashboard.trackerStats.byTracker).map(([tracker, data]) => (
-                          <div key={tracker} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                            <div>
-                              <Badge variant="outline">{tracker}</Badge>
-                            </div>
-                            <div className="flex gap-6 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Torrents:</span>{" "}
-                                <span className="font-medium">{data.totalTorrents}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Completed:</span>{" "}
-                                <span className="font-medium">{data.completedTorrents}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Ratio:</span>{" "}
-                                <span className={`font-medium ${getRatioColor(data.averageRatio)}`}>
-                                  {data.averageRatio.toFixed(2)}
-                                </span>
-                              </div>
-                              {data.averageCompletionTime && (
-                                <div>
-                                  <span className="text-muted-foreground">Avg Time:</span>{" "}
-                                  <span className="font-medium">{formatDuration(data.averageCompletionTime)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
+                    <DataTable
+                      columns={columnsTrackerStats}
+                      data={trackerStatsTableData}
+                      searchColumn="tracker"
+                      searchPlaceholder="Search trackers..."
+                      pageSize={DEFAULT_TRACKER_STATS_PAGE_SIZE}
+                    />
                   </div>
                 </>
               )}
