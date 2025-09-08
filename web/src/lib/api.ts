@@ -466,6 +466,15 @@ class ApiClient {
     if (options?.categoryFilter && options.categoryFilter.length > 0) {
       searchParams.set("categories", options.categoryFilter.join(","))
     }
+    if (options?.timeRange) {
+      searchParams.set("timeRange", options.timeRange)
+    }
+    if (options?.startDate) {
+      searchParams.set("startDate", options.startDate)
+    }
+    if (options?.endDate) {
+      searchParams.set("endDate", options.endDate)
+    }
 
     const queryString = searchParams.toString()
     const url = queryString? `/instances/${instanceId}/torrents/racing?${queryString}`: `/instances/${instanceId}/torrents/racing`

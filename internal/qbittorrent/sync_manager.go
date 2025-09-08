@@ -78,8 +78,6 @@ func NewSyncManager(clientPool *ClientPool) *SyncManager {
 	}
 }
 
-
-
 // GetErrorStore returns the error store for recording errors
 func (sm *SyncManager) GetErrorStore() *models.InstanceErrorStore {
 	return sm.clientPool.GetErrorStore()
@@ -1840,6 +1838,88 @@ func (sm *SyncManager) convertToRacingTorrents(torrents []qbt.Torrent, options R
 	return racingTorrents
 }
 
+// matchesTimeFilter checks if a torrent matches the time filter criteria
+func matchesTimeFilter(torrent qbt.Torrent, options RacingDashboardOptions) bool {
+	// Time filtering
+	now := time.Now()
+
+	// Handle preset time ranges
+	if options.TimeRange != "" {
+		var startTime time.Time
+		switch options.TimeRange {
+		case "24h":
+			startTime = now.Add(-24 * time.Hour)
+		case "7d":
+			startTime = now.Add(-7 * 24 * time.Hour)
+		case "30d":
+			startTime = now.Add(-30 * 24 * time.Hour)
+		default:
+			// Invalid time range, ignore - pass through
+			return true
+		}
+
+		if !startTime.IsZero() {
+			// For completed torrents, filter by completion date
+			// For non-completed torrents, filter by added date
+			if torrent.CompletionOn > 0 {
+				completedTime := time.Unix(torrent.CompletionOn, 0)
+				if completedTime.Before(startTime) {
+					return false
+				}
+			} else {
+				addedTime := time.Unix(torrent.AddedOn, 0)
+				if addedTime.Before(startTime) {
+					return false
+				}
+			}
+		}
+	}
+
+	// Handle custom date range
+	if options.StartDate != "" || options.EndDate != "" {
+		var startDate, endDate time.Time
+		var startErr, endErr error
+
+		if options.StartDate != "" {
+			startDate, startErr = time.Parse(time.RFC3339, options.StartDate)
+		}
+
+		if options.EndDate != "" {
+			endDate, endErr = time.Parse(time.RFC3339, options.EndDate)
+			if endErr == nil {
+				// Add 23:59:59 to end date to include the full day
+				endDate = endDate.Add(24*time.Hour - time.Second)
+			}
+		}
+
+		// Determine which timestamp to check based on completion status
+		var checkTime time.Time
+		if torrent.CompletionOn > 0 {
+			// For completed torrents, use completion date
+			checkTime = time.Unix(torrent.CompletionOn, 0)
+		} else {
+			// For non-completed torrents, use added date
+			checkTime = time.Unix(torrent.AddedOn, 0)
+		}
+
+		// Check against start date
+		if startErr == nil && !startDate.IsZero() {
+			if checkTime.Before(startDate) {
+				return false
+			}
+		}
+
+		// Check against end date
+		if endErr == nil && !endDate.IsZero() {
+			if checkTime.After(endDate) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 // matchesFilters checks if a torrent matches the filter criteria
 func (sm *SyncManager) matchesFilters(torrent qbt.Torrent, options RacingDashboardOptions) bool {
 	// Size filters
@@ -1882,6 +1962,11 @@ func (sm *SyncManager) matchesFilters(torrent qbt.Torrent, options RacingDashboa
 		if !found {
 			return false
 		}
+	}
+
+	// Apply time filtering
+	if !matchesTimeFilter(torrent, options) {
+		return false
 	}
 
 	return true

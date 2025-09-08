@@ -62,6 +62,9 @@ type RacingDashboardOptions struct {
 	MinSize        int64    `json:"minSize"`        // Minimum size in bytes (default: 0)
 	MaxSize        int64    `json:"maxSize"`        // Maximum size in bytes (default: 0 = no limit)
 	CategoryFilter []string `json:"categoryFilter"` // Filter by categories (empty = all)
+	StartDate      string   `json:"startDate"`      // Start date for filtering (ISO format)
+	EndDate        string   `json:"endDate"`        // End date for filtering (ISO format)
+	TimeRange      string   `json:"timeRange"`      // Preset time range (e.g., "24h", "7d", "30d")
 }
 
 // RacingManager manages racing dashboard functionality
@@ -123,10 +126,12 @@ func (rm *RacingManager) GetRacingDashboard(ctx context.Context, instanceID int,
 // convertToRacingTorrents converts qbt.Torrent to RacingTorrent with filtering
 func (rm *RacingManager) convertToRacingTorrents(torrents []qbt.Torrent, options RacingDashboardOptions) []RacingTorrent {
 	var racingTorrents []RacingTorrent
+	filtered := 0
 
 	for _, torrent := range torrents {
 		// Apply filters
 		if !rm.matchesFilters(torrent, options) {
+			filtered++
 			continue
 		}
 
@@ -160,6 +165,15 @@ func (rm *RacingManager) convertToRacingTorrents(torrents []qbt.Torrent, options
 		}
 
 		racingTorrents = append(racingTorrents, racingTorrent)
+	}
+
+	if options.TimeRange != "" {
+		log.Info().
+			Int("totalTorrents", len(torrents)).
+			Int("filtered", filtered).
+			Int("remaining", len(racingTorrents)).
+			Str("timeRange", options.TimeRange).
+			Msg("RACING TIME FILTER APPLIED")
 	}
 
 	return racingTorrents
@@ -207,6 +221,11 @@ func (rm *RacingManager) matchesFilters(torrent qbt.Torrent, options RacingDashb
 		if !found {
 			return false
 		}
+	}
+
+	// Apply time filtering using the shared helper
+	if !matchesTimeFilter(torrent, options) {
+		return false
 	}
 
 	return true

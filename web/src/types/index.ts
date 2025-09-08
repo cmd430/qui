@@ -445,4 +445,7 @@ export interface RacingDashboardOptions {
   minSize?: number
   maxSize?: number
   categoryFilter?: string[]
+  startDate?: string
+  endDate?: string
+  timeRange?: string
 }

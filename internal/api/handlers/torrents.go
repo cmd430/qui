@@ -843,6 +843,20 @@ func (h *TorrentsHandler) GetRacingDashboard(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// Time filtering parameters
+	if timeRange := r.URL.Query().Get("timeRange"); timeRange != "" {
+		options.TimeRange = timeRange
+		log.Debug().Str("timeRange", timeRange).Msg("Racing dashboard time range filter")
+	}
+
+	if startDate := r.URL.Query().Get("startDate"); startDate != "" {
+		options.StartDate = startDate
+	}
+
+	if endDate := r.URL.Query().Get("endDate"); endDate != "" {
+		options.EndDate = endDate
+	}
+
 	// Get racing dashboard data
 	dashboard, err := h.syncManager.GetRacingDashboard(r.Context(), instanceID, options)
 	if err != nil {
