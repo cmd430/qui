@@ -78,57 +78,7 @@ func NewSyncManager(clientPool *ClientPool) *SyncManager {
 	}
 }
 
-// RacingTorrent represents a torrent with racing metrics
-type RacingTorrent struct {
-	Hash           string     `json:"hash"`
-	Name           string     `json:"name"`
-	Size           int64      `json:"size"`
-	Tracker        string     `json:"tracker"`
-	TrackerDomain  string     `json:"trackerDomain"`
-	Ratio          float64    `json:"ratio"`
-	CompletionTime *int64     `json:"completionTime,omitempty"` // Time to complete in seconds
-	AddedOn        time.Time  `json:"addedOn"`
-	CompletedOn    *time.Time `json:"completedOn,omitempty"`
-	State          string     `json:"state"`
-	Category       string     `json:"category"`
-	Tags           string     `json:"tags"`
-}
 
-// RacingDashboard represents the complete racing dashboard data
-type RacingDashboard struct {
-	TopFastest   []RacingTorrent `json:"topFastest"`   // Torrents that completed quickest
-	TopRatios    []RacingTorrent `json:"topRatios"`    // Torrents with highest ratio
-	BottomRatios []RacingTorrent `json:"bottomRatios"` // Torrents with lowest ratio
-	TrackerStats TrackerStats    `json:"trackerStats"` // Statistics per tracker
-	LastUpdated  time.Time       `json:"lastUpdated"`
-}
-
-// TrackerStats represents statistics for each tracker
-type TrackerStats struct {
-	TotalTorrents         int                    `json:"totalTorrents"`
-	CompletedTorrents     int                    `json:"completedTorrents"`
-	AverageRatio          float64                `json:"averageRatio"`
-	AverageCompletionTime *int64                 `json:"averageCompletionTime,omitempty"`
-	ByTracker             map[string]TrackerData `json:"byTracker"`
-}
-
-// TrackerData represents data for a specific tracker
-type TrackerData struct {
-	TotalTorrents         int     `json:"totalTorrents"`
-	CompletedTorrents     int     `json:"completedTorrents"`
-	AverageRatio          float64 `json:"averageRatio"`
-	AverageCompletionTime *int64  `json:"averageCompletionTime,omitempty"`
-}
-
-// RacingDashboardOptions represents options for the racing dashboard
-type RacingDashboardOptions struct {
-	Limit          int      `json:"limit"`          // Number of torrents to show in each category (default: 5)
-	TrackerFilter  []string `json:"trackerFilter"`  // Filter by specific trackers (empty = all)
-	MinRatio       float64  `json:"minRatio"`       // Minimum ratio to include (default: 0)
-	MinSize        int64    `json:"minSize"`        // Minimum size in bytes (default: 0)
-	MaxSize        int64    `json:"maxSize"`        // Maximum size in bytes (default: 0 = no limit)
-	CategoryFilter []string `json:"categoryFilter"` // Filter by categories (empty = all)
-}
 
 // GetErrorStore returns the error store for recording errors
 func (sm *SyncManager) GetErrorStore() *models.InstanceErrorStore {
