@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { PremiumLockedOverlay } from "@/components/premium/PremiumLockedOverlay"
+import { CompletionTimeChart } from "@/components/racing/charts/CompletionTimeChart"
+import { SizeRatioScatter } from "@/components/racing/charts/SizeRatioScatter"
+import { TrackerPerformanceChart } from "@/components/racing/charts/TrackerPerformanceChart"
+import { VolumeChart } from "@/components/racing/charts/VolumeChart"
 import { columnsFastest } from "@/components/racing/columns-fastest"
 import { columnsRatios } from "@/components/racing/columns-ratios"
 import type { TrackerStatRow } from "@/components/racing/columns-tracker-stats"
@@ -14,10 +19,6 @@ import {
   DEFAULT_TRACKER_STATS_PAGE_SIZE
 } from "@/components/racing/constants"
 import { DataTable } from "@/components/racing/data-table"
-import { CompletionTimeChart } from "@/components/racing/charts/CompletionTimeChart"
-import { TrackerPerformanceChart } from "@/components/racing/charts/TrackerPerformanceChart"
-import { VolumeChart } from "@/components/racing/charts/VolumeChart"
-import { SizeRatioScatter } from "@/components/racing/charts/SizeRatioScatter"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,7 +39,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useInstances } from "@/hooks/useInstances"
+import { useHasPremiumAccess } from "@/hooks/useThemeLicense"
 import { api } from "@/lib/api"
+import { generateMockRacingDashboard } from "@/lib/racing-mock-data"
 import { cn } from "@/lib/utils"
 import type { RacingDashboardOptions } from "@/types"
 import { useQuery } from "@tanstack/react-query"
@@ -46,9 +49,6 @@ import { format } from "date-fns"
 import { Activity, AlertCircle, BarChart3, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, LineChart, ListFilter, Percent, RotateCcw, ScatterChart, Settings2, Sparkles, Tag, TrendingDown, TrendingUp } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
-import { useHasPremiumAccess } from "@/hooks/useThemeLicense"
-import { generateMockRacingDashboard } from "@/lib/racing-mock-data"
-import { PremiumLockedOverlay } from "@/components/premium/PremiumLockedOverlay"
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds}s`
@@ -831,7 +831,7 @@ export function RacingDashboard() {
 
             {/* Racing Tables Tabs - Only show for premium users */}
             {hasPremiumAccess && (
-              <Card>
+              <Card className="mt-6">
                 <CardHeader>
                   <CardTitle>Racing Performance Details</CardTitle>
                   <CardDescription>
@@ -921,7 +921,7 @@ export function RacingDashboard() {
 
             {/* Tracker Statistics - Only show for premium users */}
             {hasPremiumAccess && (
-              <Card>
+              <Card className="mt-6">
                 <CardHeader>
                   <CardTitle>Tracker Statistics</CardTitle>
                   <CardDescription>
