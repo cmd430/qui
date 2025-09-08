@@ -14,6 +14,10 @@ import {
   DEFAULT_TRACKER_STATS_PAGE_SIZE
 } from "@/components/racing/constants"
 import { DataTable } from "@/components/racing/data-table"
+import { CompletionTimeChart } from "@/components/racing/charts/CompletionTimeChart"
+import { TrackerPerformanceChart } from "@/components/racing/charts/TrackerPerformanceChart"
+import { VolumeChart } from "@/components/racing/charts/VolumeChart"
+import { SizeRatioScatter } from "@/components/racing/charts/SizeRatioScatter"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,7 +43,7 @@ import { cn } from "@/lib/utils"
 import type { RacingDashboardOptions } from "@/types"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
-import { Activity, AlertCircle, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, ListFilter, Percent, RotateCcw, Settings2, Tag, TrendingDown, TrendingUp } from "lucide-react"
+import { Activity, AlertCircle, BarChart3, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, LineChart, ListFilter, Percent, RotateCcw, ScatterChart, Settings2, Tag, TrendingDown, TrendingUp } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 
@@ -711,10 +715,85 @@ export function RacingDashboard() {
 
       {dashboard && (
         <>
+          {/* Performance Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Completion Time Trends */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LineChart className="h-5 w-5 text-primary" />
+                  Completion Time Trends
+                </CardTitle>
+                <CardDescription>
+                  Average completion times over time
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CompletionTimeChart
+                  data={[...dashboard.topFastest, ...dashboard.topRatios, ...dashboard.bottomRatios]}
+                  timeRange={options.timeRange || "7d"}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Upload/Download Volume */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  Data Transfer Volume
+                </CardTitle>
+                <CardDescription>
+                  Upload and download volume over time
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <VolumeChart
+                  data={[...dashboard.topFastest, ...dashboard.topRatios, ...dashboard.bottomRatios]}
+                  timeRange={options.timeRange || "7d"}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Tracker Performance Comparison */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Tracker Performance Comparison
+                </CardTitle>
+                <CardDescription>
+                  Compare performance metrics across trackers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TrackerPerformanceChart data={trackerStatsTableData} />
+              </CardContent>
+            </Card>
+
+            {/* Size vs Ratio Analysis */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ScatterChart className="h-5 w-5 text-primary" />
+                  Size vs Ratio Performance
+                </CardTitle>
+                <CardDescription>
+                  Upload ratio performance across different torrent sizes
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <SizeRatioScatter
+                  data={[...dashboard.topFastest, ...dashboard.topRatios, ...dashboard.bottomRatios]}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Racing Tables Tabs */}
           <Card>
             <CardHeader>
-              <CardTitle>Racing Performance</CardTitle>
+              <CardTitle>Racing Performance Details</CardTitle>
               <CardDescription>
                 Detailed torrent performance metrics
               </CardDescription>
