@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap } from "lucide-react"
-import type { EconomyAnalysis, EconomyStats } from "@/types"
+import type { EconomyAnalysis } from "@/types"
 
 interface EconomyDashboardProps {
   analysis: EconomyAnalysis
