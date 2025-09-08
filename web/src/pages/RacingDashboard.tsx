@@ -3,6 +3,17 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+import { columnsFastest } from "@/components/racing/columns-fastest"
+import { columnsRatios } from "@/components/racing/columns-ratios"
+import type { TrackerStatRow } from "@/components/racing/columns-tracker-stats"
+import { columnsTrackerStats } from "@/components/racing/columns-tracker-stats"
+import {
+  API_LIMIT_OPTIONS,
+  DEFAULT_API_LIMIT,
+  DEFAULT_TORRENTS_PAGE_SIZE,
+  DEFAULT_TRACKER_STATS_PAGE_SIZE
+} from "@/components/racing/constants"
+import { DataTable } from "@/components/racing/data-table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,18 +33,7 @@ import type { RacingDashboardOptions } from "@/types"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { Activity, AlertCircle, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, ListFilter, Percent, RotateCcw, Settings2, Tag, TrendingDown, TrendingUp } from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
-import { DataTable } from "@/components/racing/data-table"
-import { columnsFastest } from "@/components/racing/columns-fastest"
-import { columnsRatios } from "@/components/racing/columns-ratios"
-import { columnsTrackerStats } from "@/components/racing/columns-tracker-stats"
-import type { TrackerStatRow } from "@/components/racing/columns-tracker-stats"
-import {
-  DEFAULT_API_LIMIT,
-  API_LIMIT_OPTIONS,
-  DEFAULT_TORRENTS_PAGE_SIZE,
-  DEFAULT_TRACKER_STATS_PAGE_SIZE
-} from "@/components/racing/constants"
+import { useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 
 function formatDuration(seconds: number): string {
@@ -210,7 +210,7 @@ export function RacingDashboard() {
     return (
       <div className="container mx-auto p-6">
         <Alert>
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircle className="h-4 w-4 text-primary" />
           <AlertDescription>
             No instances configured. Please add an instance first.
           </AlertDescription>
@@ -245,10 +245,10 @@ export function RacingDashboard() {
               <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
                 <div className="space-y-1 flex-1">
                   <CardTitle className="flex gap-2">
-                    <Filter className="h-5 w-5" />
+                    <Filter className="h-5 w-5 text-primary" />
                     Filters
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="pt-2">
                     Configure filters to analyze specific conditions
                   </CardDescription>
                 </div>
@@ -264,14 +264,14 @@ export function RacingDashboard() {
               {/* Basic Settings Section */}
               <div className="space-y-4 pt-2">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Settings2 className="h-4 w-4" />
+                  <Settings2 className="h-4 w-4 text-primary" />
                   Basic Settings
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Instance Selector */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
-                      <Database className="h-3 w-3" />
+                      <Database className="h-3 w-3 text-primary" />
                       Instance
                     </Label>
                     <Select
@@ -297,7 +297,7 @@ export function RacingDashboard() {
                   {/* Results per section */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
-                      <ListFilter className="h-3 w-3" />
+                      <ListFilter className="h-3 w-3 text-primary" />
                       Results per section
                     </Label>
                     <Select
@@ -327,14 +327,14 @@ export function RacingDashboard() {
               {/* Performance Filters Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <TrendingUp className="h-4 w-4" />
+                  <TrendingUp className="h-4 w-4 text-primary" />
                   Performance Filters
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Min Ratio */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
-                      <Percent className="h-3 w-3" />
+                      <Percent className="h-3 w-3 text-primary" />
                       Minimum Ratio
                     </Label>
                     <div className="relative">
@@ -359,7 +359,7 @@ export function RacingDashboard() {
                   {/* Size Range */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
-                      <HardDrive className="h-3 w-3" />
+                      <HardDrive className="h-3 w-3 text-primary" />
                       Size Range
                     </Label>
                     <div className="flex items-center gap-2">
@@ -411,14 +411,14 @@ export function RacingDashboard() {
               {/* Time Period Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Clock className="h-4 w-4" />
+                  <Clock className="h-4 w-4 text-primary" />
                   Time Period
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Time Range Preset */}
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
-                      <CalendarIcon className="h-3 w-3" />
+                      <CalendarIcon className="h-3 w-3 text-primary" />
                       Time Range
                     </Label>
                     <Select
@@ -540,14 +540,14 @@ export function RacingDashboard() {
               {/* Advanced Filters Section */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <Settings2 className="h-4 w-4" />
+                  <Settings2 className="h-4 w-4 text-primary" />
                   Advanced Filters
                 </div>
 
                 {/* Tracker Filter */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <Database className="h-3 w-3" />
+                    <Database className="h-3 w-3 text-primary" />
                     Tracker Filter
                   </Label>
                   <div className="flex gap-2">
@@ -601,7 +601,7 @@ export function RacingDashboard() {
                 {/* Category Filter */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
-                    <Tag className="h-3 w-3" />
+                    <Tag className="h-3 w-3 text-primary" />
                     Category Filter
                   </Label>
                   <div className="flex gap-2">
@@ -650,7 +650,7 @@ export function RacingDashboard() {
 
       {error && (
         <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircle className="h-4 w-4 text-primary" />
           <AlertDescription>
             Failed to load racing dashboard: {(error as Error).message}
           </AlertDescription>
@@ -678,15 +678,15 @@ export function RacingDashboard() {
               <Tabs defaultValue="fastest" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="fastest" className="flex items-center gap-2">
-                    <Clock className="h-4 w-4" />
+                    <Clock className="h-4 w-4 text-primary" />
                     Fastest Completions
                   </TabsTrigger>
                   <TabsTrigger value="top-ratios" className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
+                    <TrendingUp className="h-4 w-4 text-primary" />
                     Top Ratios
                   </TabsTrigger>
                   <TabsTrigger value="bottom-ratios" className="flex items-center gap-2">
-                    <TrendingDown className="h-4 w-4" />
+                    <TrendingDown className="h-4 w-4 text-primary" />
                     Bottom Ratios
                   </TabsTrigger>
                 </TabsList>
