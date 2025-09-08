@@ -9,15 +9,15 @@ import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap } from "lucide-react"
-import type { EconomyAnalysis, EconomyScore, EconomyStats } from "@/types"
+import type { EconomyAnalysis, EconomyStats } from "@/types"
 
 interface EconomyDashboardProps {
   analysis: EconomyAnalysis
   instanceId: number
 }
 
-export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps) {
-  const { stats, scores, topValuable } = analysis
+export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
+  const { stats, topValuable } = analysis
 
   return (
     <div className="space-y-6">
@@ -29,9 +29,9 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
             <HardDrive className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatBytes(stats.TotalStorage)}</div>
+            <div className="text-2xl font-bold">{formatBytes(stats.totalStorage)}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.TotalTorrents} torrents analyzed
+              {stats.totalTorrents} torrents analyzed
             </p>
           </CardContent>
         </Card>
@@ -42,9 +42,9 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatBytes(stats.DeduplicatedStorage)}</div>
+            <div className="text-2xl font-bold">{formatBytes(stats.deduplicatedStorage)}</div>
             <p className="text-xs text-muted-foreground">
-              {formatBytes(stats.StorageSavings)} saved
+              {formatBytes(stats.storageSavings)} saved
             </p>
           </CardContent>
         </Card>
@@ -55,9 +55,9 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.AverageEconomyScore.toFixed(2)}</div>
+            <div className="text-2xl font-bold">{stats.averageEconomyScore.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.HighValueTorrents} high-value torrents
+              {stats.highValueTorrents} high-value torrents
             </p>
           </CardContent>
         </Card>
@@ -68,7 +68,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
             <Star className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.RareContentCount}</div>
+            <div className="text-2xl font-bold">{stats.rareContentCount}</div>
             <p className="text-xs text-muted-foreground">
               Low seed count torrents
             </p>
@@ -92,16 +92,16 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Deduplication Efficiency</span>
               <span className="text-sm text-muted-foreground">
-                {((stats.StorageSavings / stats.TotalStorage) * 100).toFixed(1)}% saved
+                {((stats.storageSavings / stats.totalStorage) * 100).toFixed(1)}% saved
               </span>
             </div>
             <Progress
-              value={(stats.DeduplicatedStorage / stats.TotalStorage) * 100}
+              value={(stats.deduplicatedStorage / stats.totalStorage) * 100}
               className="h-2"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Deduplicated: {formatBytes(stats.DeduplicatedStorage)}</span>
-              <span>Total: {formatBytes(stats.TotalStorage)}</span>
+              <span>Deduplicated: {formatBytes(stats.deduplicatedStorage)}</span>
+              <span>Total: {formatBytes(stats.totalStorage)}</span>
             </div>
           </div>
         </CardContent>
@@ -172,15 +172,15 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
           <CardContent className="space-y-2">
             <div className="text-sm">
               <span className="font-medium">Well-seeded old content:</span>{" "}
-              <Badge variant="outline">{stats.WellSeededOldContent}</Badge>
+              <Badge variant="outline">{stats.wellSeededOldContent}</Badge>
             </div>
             <div className="text-sm">
               <span className="font-medium">Rare content count:</span>{" "}
-              <Badge variant="outline">{stats.RareContentCount}</Badge>
+              <Badge variant="outline">{stats.rareContentCount}</Badge>
             </div>
             <div className="text-sm">
               <span className="font-medium">High-value torrents:</span>{" "}
-              <Badge variant="outline">{stats.HighValueTorrents}</Badge>
+              <Badge variant="outline">{stats.highValueTorrents}</Badge>
             </div>
           </CardContent>
         </Card>

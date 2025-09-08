@@ -5,14 +5,13 @@
 
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EconomyDashboard } from "@/components/dashboard/EconomyDashboard"
 import { api } from "@/lib/api"
 import { Loader2, TrendingUp, AlertCircle } from "lucide-react"
-import type { EconomyAnalysis } from "@/types"
 
 export function Economy() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null)
@@ -32,7 +31,7 @@ export function Economy() {
   })
 
   // Auto-select first connected instance
-  const connectedInstances = instances?.filter(i => i.connected) || []
+  const connectedInstances = instances?.filter((i: any) => i.connected) || []
   if (selectedInstanceId === null && connectedInstances.length > 0) {
     setSelectedInstanceId(connectedInstances[0].id)
   }
