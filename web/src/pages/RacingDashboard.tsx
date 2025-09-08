@@ -730,7 +730,11 @@ export function RacingDashboard() {
               </CardHeader>
               <CardContent>
                 <CompletionTimeChart
-                  data={[...dashboard.topFastest, ...dashboard.topRatios, ...dashboard.bottomRatios]}
+                  data={[
+                    ...(dashboard.topFastest || []),
+                    ...(dashboard.topRatios || []),
+                    ...(dashboard.bottomRatios || []),
+                  ]}
                   timeRange={options.timeRange || "7d"}
                 />
               </CardContent>
@@ -749,7 +753,11 @@ export function RacingDashboard() {
               </CardHeader>
               <CardContent>
                 <VolumeChart
-                  data={[...dashboard.topFastest, ...dashboard.topRatios, ...dashboard.bottomRatios]}
+                  data={[
+                    ...(dashboard.topFastest || []),
+                    ...(dashboard.topRatios || []),
+                    ...(dashboard.bottomRatios || []),
+                  ]}
                   timeRange={options.timeRange || "7d"}
                 />
               </CardContent>
@@ -784,7 +792,11 @@ export function RacingDashboard() {
               </CardHeader>
               <CardContent>
                 <SizeRatioScatter
-                  data={[...dashboard.topFastest, ...dashboard.topRatios, ...dashboard.bottomRatios]}
+                  data={[
+                    ...(dashboard.topFastest || []),
+                    ...(dashboard.topRatios || []),
+                    ...(dashboard.bottomRatios || []),
+                  ]}
                 />
               </CardContent>
             </Card>
