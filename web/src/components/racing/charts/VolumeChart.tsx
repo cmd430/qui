@@ -122,7 +122,6 @@ export function VolumeChart({ data, timeRange }: VolumeChartProps) {
         <Area
           type="monotone"
           dataKey="uploaded"
-          stackId="1"
           stroke="var(--chart-1)"
           fillOpacity={1}
           fill="url(#colorUpload)"
@@ -130,7 +129,6 @@ export function VolumeChart({ data, timeRange }: VolumeChartProps) {
         <Area
           type="monotone"
           dataKey="downloaded"
-          stackId="1"
           stroke="var(--chart-2)"
           fillOpacity={1}
           fill="url(#colorDownload)"

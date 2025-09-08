@@ -5,7 +5,6 @@
 
 import { PremiumLockedOverlay } from "@/components/premium/PremiumLockedOverlay"
 import { CompletionTimeChart } from "@/components/racing/charts/CompletionTimeChart"
-import { SizeRatioScatter } from "@/components/racing/charts/SizeRatioScatter"
 import { TrackerPerformanceChart } from "@/components/racing/charts/TrackerPerformanceChart"
 import { VolumeChart } from "@/components/racing/charts/VolumeChart"
 import { columnsFastest } from "@/components/racing/columns-fastest"
@@ -46,7 +45,7 @@ import { cn } from "@/lib/utils"
 import type { RacingDashboardOptions } from "@/types"
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
-import { Activity, AlertCircle, BarChart3, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, LineChart, ListFilter, Percent, RotateCcw, ScatterChart, Settings2, Sparkles, Tag, TrendingDown, TrendingUp } from "lucide-react"
+import { Activity, AlertCircle, BarChart3, CalendarIcon, ChevronDown, Clock, Database, Filter, HardDrive, LineChart, ListFilter, Percent, RotateCcw, Settings2, Sparkles, Tag, TrendingDown, TrendingUp } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { DateRange } from "react-day-picker"
 
@@ -289,7 +288,7 @@ export function RacingDashboard() {
                       <Filter className="h-5 w-5 text-primary" />
                       Filters
                     </CardTitle>
-                    <CardDescription className="pt-2">
+                    <CardDescription className="pb-2">
                       Configure filters to analyze specific conditions
                     </CardDescription>
                   </div>
@@ -303,7 +302,7 @@ export function RacingDashboard() {
             <CollapsibleContent>
               <CardContent className="space-y-6">
                 {/* Basic Settings Section */}
-                <div className="space-y-4 pt-2">
+                <div className="space-y-4 pb-2">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <Settings2 className="h-4 w-4 text-primary" />
                     Basic Settings
@@ -703,7 +702,7 @@ export function RacingDashboard() {
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-2">
+                <div className="flex justify-end pb-2">
                   <Button onClick={resetFilters} variant="outline" size="sm">
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Reset All Filters
@@ -742,96 +741,9 @@ export function RacingDashboard() {
 
         {displayDashboard && (
           <>
-            {/* Performance Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Completion Time Trends */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <LineChart className="h-5 w-5 text-primary" />
-                    Completion Time Trends
-                  </CardTitle>
-                  <CardDescription>
-                    Average completion times over time
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CompletionTimeChart
-                    data={[
-                      ...(displayDashboard.topFastest || []),
-                      ...(displayDashboard.topRatios || []),
-                      ...(displayDashboard.bottomRatios || []),
-                    ]}
-                    timeRange={options.timeRange || "7d"}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Upload/Download Volume */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    Data Transfer Volume
-                  </CardTitle>
-                  <CardDescription>
-                    Upload and download volume over time
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <VolumeChart
-                    data={[
-                      ...(displayDashboard.topFastest || []),
-                      ...(displayDashboard.topRatios || []),
-                      ...(displayDashboard.bottomRatios || []),
-                    ]}
-                    timeRange={options.timeRange || "7d"}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Tracker Performance Comparison */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-primary" />
-                    Tracker Performance Comparison
-                  </CardTitle>
-                  <CardDescription>
-                    Compare performance metrics across trackers
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <TrackerPerformanceChart data={trackerStatsTableData} />
-                </CardContent>
-              </Card>
-
-              {/* Size vs Ratio Analysis */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <ScatterChart className="h-5 w-5 text-primary" />
-                    Size vs Ratio Performance
-                  </CardTitle>
-                  <CardDescription>
-                    Upload ratio performance across different torrent sizes
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <SizeRatioScatter
-                    data={[
-                      ...(displayDashboard.topFastest || []),
-                      ...(displayDashboard.topRatios || []),
-                      ...(displayDashboard.bottomRatios || []),
-                    ]}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-
             {/* Racing Tables Tabs - Only show for premium users */}
             {hasPremiumAccess && (
-              <Card className="mt-6">
+              <Card className="mb-6">
                 <CardHeader>
                   <CardTitle>Racing Performance Details</CardTitle>
                   <CardDescription>
@@ -919,9 +831,74 @@ export function RacingDashboard() {
               </Card>
             )}
 
+            {/* Performance Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              {/* Completion Time Trends */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LineChart className="h-5 w-5 text-primary" />
+                    Completion Time Trends
+                  </CardTitle>
+                  <CardDescription>
+                    Average completion times over time
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CompletionTimeChart
+                    data={[
+                      ...(displayDashboard.topFastest || []),
+                      ...(displayDashboard.topRatios || []),
+                      ...(displayDashboard.bottomRatios || []),
+                    ]}
+                    timeRange={options.timeRange || "7d"}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Upload/Download Volume */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Data Transfer Volume
+                  </CardTitle>
+                  <CardDescription>
+                    Upload and download volume over time
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <VolumeChart
+                    data={[
+                      ...(displayDashboard.topFastest || []),
+                      ...(displayDashboard.topRatios || []),
+                      ...(displayDashboard.bottomRatios || []),
+                    ]}
+                    timeRange={options.timeRange || "7d"}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tracker Performance Comparison - Full Width */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Tracker Performance Comparison
+                </CardTitle>
+                <CardDescription>
+                  Compare performance metrics across trackers
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TrackerPerformanceChart data={trackerStatsTableData} />
+              </CardContent>
+            </Card>
+
             {/* Tracker Statistics - Only show for premium users */}
             {hasPremiumAccess && (
-              <Card className="mt-6">
+              <Card className="mt-6 mb-2">
                 <CardHeader>
                   <CardTitle>Tracker Statistics</CardTitle>
                   <CardDescription>
