@@ -273,6 +273,9 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const filteredTorrents = useMemo(() => {
     let filtered = sortedTorrents
 
+    // Filter out duplicates entirely - only show individual torrents or groups
+    filtered = filtered.filter(torrent => torrent.deduplicationFactor > 0)
+
     // Filter by economy score
     if (filterScoreMin !== "" || filterScoreMax !== "") {
       filtered = filtered.filter(torrent => {
@@ -1582,10 +1585,9 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
           <div className="space-y-6">
             {(() => {
               const selectedTorrents = selectedHashes.map(hash =>
-                filteredTorrents.find(t => t.hash === hash)
+                sortedTorrents.find(t => t.hash === hash)
               ).filter(Boolean) as EconomyScore[]
 
-              const totalSize = selectedTorrents.reduce((sum, t) => sum + t.size, 0)
               const duplicates = selectedTorrents.filter(t => t.deduplicationFactor === 0)
               const uniqueTorrents = selectedTorrents.filter(t => t.deduplicationFactor > 0)
 
@@ -1612,8 +1614,10 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                 return acc
               }, {} as Record<string, number>)
 
-              // Size analysis
+              // Size analysis - calculate actual storage savings
               const totalDuplicateSize = duplicates.reduce((sum, t) => sum + t.size, 0)
+              const totalStorageValue = selectedTorrents.reduce((sum, t) => sum + t.storageValue, 0)
+              const actualStorageSavings = selectedTorrents.reduce((sum, t) => sum + (t.storageValue * (1 - t.deduplicationFactor)), 0)
               const avgDuplicateSize = duplicates.length > 0 ? totalDuplicateSize / duplicates.length : 0
 
               // Ratio analysis
@@ -1645,7 +1649,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                       <div className="text-sm text-muted-foreground">Unique</div>
                     </div>
                     <div className="p-3 bg-blue-50 rounded-lg">
-                      <div className="text-2xl font-bold text-blue-600">{formatBytes(totalDuplicateSize)}</div>
+                      <div className="text-2xl font-bold text-blue-600">{formatBytes(actualStorageSavings)}</div>
                       <div className="text-sm text-muted-foreground">Space to Free</div>
                     </div>
                   </div>
@@ -1656,8 +1660,8 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                       <h4 className="font-semibold">Storage Impact</h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span>Total size:</span>
-                          <span className="font-medium">{formatBytes(totalSize)}</span>
+                          <span>Total storage value:</span>
+                          <span className="font-medium">{formatBytes(totalStorageValue)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Duplicate size:</span>
@@ -1665,7 +1669,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                         </div>
                         <div className="flex justify-between">
                           <span>Space saved:</span>
-                          <span className="font-medium text-green-600">{formatBytes(totalDuplicateSize)}</span>
+                          <span className="font-medium text-green-600">{formatBytes(actualStorageSavings)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Avg duplicate size:</span>
@@ -1834,12 +1838,12 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                 <div className="hidden md:flex items-center gap-6 text-sm">
                   {(() => {
                     const selectedTorrents = selectedHashes.map(hash =>
-                      filteredTorrents.find(t => t.hash === hash)
+                      sortedTorrents.find(t => t.hash === hash)
                     ).filter(Boolean) as EconomyScore[]
 
                     const duplicates = selectedTorrents.filter(t => t.deduplicationFactor === 0)
                     const totalSize = selectedTorrents.reduce((sum, t) => sum + t.size, 0)
-                    const totalDuplicateSize = duplicates.reduce((sum, t) => sum + t.size, 0)
+                    const actualStorageSavings = selectedTorrents.reduce((sum, t) => sum + (t.storageValue * (1 - t.deduplicationFactor)), 0)
 
                     return (
                       <>
@@ -1849,7 +1853,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                         </div>
                         <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
                           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <span className="font-medium">{formatBytes(totalDuplicateSize)} to save</span>
+                          <span className="font-medium">{formatBytes(actualStorageSavings)} to save</span>
                         </div>
                         <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
                           <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>

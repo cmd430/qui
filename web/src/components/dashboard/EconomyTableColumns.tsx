@@ -135,7 +135,6 @@ export function createEconomyColumns(
       header: "Name",
       cell: ({ row }: any) => {
         const torrent = row.original
-        const isDuplicate = torrent.deduplicationFactor === 0
 
         return (
           <div className="flex items-center gap-2 max-w-xs">
@@ -143,11 +142,6 @@ export function createEconomyColumns(
               <div className="font-medium truncate" title={incognitoMode ? getLinuxIsoName(torrent.hash) : torrent.name}>
                 {incognitoMode ? getLinuxIsoName(torrent.hash) : torrent.name}
               </div>
-              {isDuplicate && (
-                <Badge variant="outline" className="text-xs mt-1">
-                  Duplicate
-                </Badge>
-              )}
             </div>
           </div>
         )
@@ -248,15 +242,10 @@ export function createEconomyColumns(
       },
       cell: ({ row }: any) => {
         const score = row.original.economyScore
-        const isDuplicate = row.original.deduplicationFactor === 0
 
         return (
           <div className={`font-semibold ${score < 20 ? "text-red-600" : score < 50 ? "text-yellow-600" : "text-green-600"}`}>
-            {isDuplicate ? (
-              <span className="text-gray-500">0.00 (Dup)</span>
-            ) : (
-              score.toFixed(2)
-            )}
+            {score.toFixed(2)}
           </div>
         )
       },
@@ -370,17 +359,6 @@ export function createEconomyColumns(
       },
       cell: ({ row }: any) => {
         const factor = row.original.deduplicationFactor
-        const isDuplicate = factor === 0
-
-        if (isDuplicate) {
-          return (
-            <div className="text-center">
-              <Badge variant="destructive" className="text-xs">
-                Duplicate
-              </Badge>
-            </div>
-          )
-        }
 
         return (
           <div className="text-center">
@@ -403,15 +381,6 @@ export function createEconomyColumns(
       header: "Group",
       cell: ({ row }: any) => {
         const torrent = row.original
-        const isDuplicate = torrent.deduplicationFactor === 0
-
-        if (isDuplicate) {
-          return (
-            <Badge variant="outline" className="text-xs">
-              Duplicate Group
-            </Badge>
-          )
-        }
 
         // For now, show if it has duplicates
         if (torrent.duplicates && torrent.duplicates.length > 0) {
