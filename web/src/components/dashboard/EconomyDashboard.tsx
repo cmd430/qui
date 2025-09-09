@@ -68,8 +68,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Tooltip,
   TooltipContent,
@@ -86,7 +84,7 @@ import { formatBytes } from "@/lib/utils"
 import type { EconomyScore, TorrentGroup } from "@/types"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSearch } from "@tanstack/react-router"
-import { CheckCircle, Columns3, Copy, Eye, EyeOff, Filter, Calculator, Folder, Loader2, Pause, Play, Radio, Tag, Trash2 } from "lucide-react"
+import { CheckCircle, Columns3, Copy, Eye, EyeOff, Calculator, Folder, Loader2, Pause, Play, Radio, Tag, Trash2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { Pagination } from "@/components/ui/pagination"
@@ -381,8 +379,20 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       onRowSelection: handleRowSelection,
       isAllSelected,
       excludedFromSelectAll,
+      filters: {
+        scoreMin: filterScoreMin,
+        scoreMax: filterScoreMax,
+        deduplicationMin: filterDeduplicationMin,
+        deduplicationMax: filterDeduplicationMax,
+      },
+      filterHandlers: {
+        setScoreMin: setFilterScoreMin,
+        setScoreMax: setFilterScoreMax,
+        setDeduplicationMin: setFilterDeduplicationMin,
+        setDeduplicationMax: setFilterDeduplicationMax,
+      },
     }),
-    [incognitoMode, handleSelectAll, isSelectAllChecked, isSelectAllIndeterminate, handleRowSelection, isAllSelected, excludedFromSelectAll]
+    [incognitoMode, handleSelectAll, isSelectAllChecked, isSelectAllIndeterminate, handleRowSelection, isAllSelected, excludedFromSelectAll, filterScoreMin, filterScoreMax, filterDeduplicationMin, filterDeduplicationMax, setFilterScoreMin, setFilterScoreMax, setFilterDeduplicationMin, setFilterDeduplicationMax]
   )
 
   const table = useReactTable({
@@ -965,108 +975,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
         <div className="flex items-center gap-1 sm:gap-2">
           {/* Filter button */}
           <div className="hidden xl:block">
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className={`relative ${filterScoreMin !== "" || filterScoreMax !== "" || filterDeduplicationMin !== "" || filterDeduplicationMax !== "" ? "border-primary" : ""}`}
-                    >
-                      <Filter className="h-4 w-4" />
-                      {(filterScoreMin !== "" || filterScoreMax !== "" || filterDeduplicationMin !== "" || filterDeduplicationMax !== "") && (
-                        <span className="absolute -top-1 -right-1 h-2 w-2 bg-primary rounded-full" />
-                      )}
-                      <span className="sr-only">Filter torrents</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>Filter torrents</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end" className="w-80">
-                <DropdownMenuLabel>Filter Torrents</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <div className="p-4 space-y-4">
-                  <div>
-                    <Label htmlFor="score-min" className="text-sm font-medium">Economy Score Range</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        id="score-min"
-                        type="number"
-                        placeholder="Min"
-                        value={filterScoreMin}
-                        onChange={(e) => setFilterScoreMin(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-muted-foreground self-center">to</span>
-                      <Input
-                        id="score-max"
-                        type="number"
-                        placeholder="Max"
-                        value={filterScoreMax}
-                        onChange={(e) => setFilterScoreMax(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
-                        className="w-20"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="dedup-min" className="text-sm font-medium">Deduplication Factor Range</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Input
-                        id="dedup-min"
-                        type="number"
-                        placeholder="Min"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={filterDeduplicationMin}
-                        onChange={(e) => setFilterDeduplicationMin(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
-                        className="w-20"
-                      />
-                      <span className="text-sm text-muted-foreground self-center">to</span>
-                      <Input
-                        id="dedup-max"
-                        type="number"
-                        placeholder="Max"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={filterDeduplicationMax}
-                        onChange={(e) => setFilterDeduplicationMax(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
-                        className="w-20"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setFilterScoreMin("")
-                        setFilterScoreMax("")
-                        setFilterDeduplicationMin("")
-                        setFilterDeduplicationMax("")
-                      }}
-                      className="flex-1"
-                    >
-                      Clear Filters
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setFilterScoreMin(0)
-                        setFilterScoreMax(2)
-                      }}
-                      className="flex-1"
-                    >
-                      Low Value (Score &lt; 2.0)
-                    </Button>
-                  </div>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Filters are now inline on each column */}
           </div>
           {/* Action buttons */}
           <div className="flex gap-1 sm:gap-2 flex-shrink-0">

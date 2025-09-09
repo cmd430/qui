@@ -7,6 +7,9 @@ import React from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { ChevronDown, ChevronUp, X } from "lucide-react"
 import { formatBytes } from "@/lib/utils"
 import { getLinuxIsoName } from "@/lib/incognito"
 import type { EconomyScore } from "@/types"
@@ -17,6 +20,20 @@ interface CustomSelectAllProps {
   isIndeterminate: boolean
 }
 
+interface FilterState {
+  scoreMin: number | ""
+  scoreMax: number | ""
+  deduplicationMin: number | ""
+  deduplicationMax: number | ""
+}
+
+interface FilterHandlers {
+  setScoreMin: (value: number | "") => void
+  setScoreMax: (value: number | "") => void
+  setDeduplicationMin: (value: number | "") => void
+  setDeduplicationMax: (value: number | "") => void
+}
+
 interface ColumnOptions {
   shiftPressedRef: React.MutableRefObject<boolean>
   lastSelectedIndexRef: React.MutableRefObject<number | null>
@@ -24,6 +41,8 @@ interface ColumnOptions {
   onRowSelection?: (hash: string, checked: boolean, rowId?: string) => void
   isAllSelected?: boolean
   excludedFromSelectAll?: Set<string>
+  filters?: FilterState
+  filterHandlers?: FilterHandlers
 }
 
 export function createEconomyColumns(
@@ -38,6 +57,8 @@ export function createEconomyColumns(
     onRowSelection,
     isAllSelected,
     excludedFromSelectAll,
+    filters,
+    filterHandlers,
   } = options
 
   return [
@@ -172,7 +193,59 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "economyScore",
-      header: "Economy Score",
+      header: () => {
+        const [showFilter, setShowFilter] = React.useState(false)
+
+        return (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <span className="font-medium">Economy Score</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0"
+                onClick={() => setShowFilter(!showFilter)}
+              >
+                {showFilter ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </Button>
+            </div>
+            {showFilter && filters && filterHandlers && (
+              <div className="mt-2 space-y-2 p-2 bg-muted/50 rounded border">
+                <div className="flex gap-1">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    value={filters.scoreMin}
+                    onChange={(e) => filterHandlers.setScoreMin(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                    className="h-6 text-xs w-16"
+                  />
+                  <span className="text-xs text-muted-foreground self-center">to</span>
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    value={filters.scoreMax}
+                    onChange={(e) => filterHandlers.setScoreMax(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                    className="h-6 text-xs w-16"
+                  />
+                  {(filters.scoreMin || filters.scoreMax) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => {
+                        filterHandlers.setScoreMin("")
+                        filterHandlers.setScoreMax("")
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      },
       cell: ({ row }: any) => {
         const score = row.original.economyScore
         const isDuplicate = row.original.deduplicationFactor === 0
@@ -236,7 +309,65 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "deduplicationFactor",
-      header: "Deduplication",
+      header: () => {
+        const [showFilter, setShowFilter] = React.useState(false)
+
+        return (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <span className="font-medium">Deduplication</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-4 w-4 p-0"
+                onClick={() => setShowFilter(!showFilter)}
+              >
+                {showFilter ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              </Button>
+            </div>
+            {showFilter && filters && filterHandlers && (
+              <div className="mt-2 space-y-2 p-2 bg-muted/50 rounded border">
+                <div className="flex gap-1">
+                  <Input
+                    type="number"
+                    placeholder="Min"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={filters.deduplicationMin}
+                    onChange={(e) => filterHandlers.setDeduplicationMin(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                    className="h-6 text-xs w-16"
+                  />
+                  <span className="text-xs text-muted-foreground self-center">to</span>
+                  <Input
+                    type="number"
+                    placeholder="Max"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={filters.deduplicationMax}
+                    onChange={(e) => filterHandlers.setDeduplicationMax(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                    className="h-6 text-xs w-16"
+                  />
+                  {(filters.deduplicationMin || filters.deduplicationMax) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={() => {
+                        filterHandlers.setDeduplicationMin("")
+                        filterHandlers.setDeduplicationMax("")
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      },
       cell: ({ row }: any) => {
         const factor = row.original.deduplicationFactor
         const isDuplicate = factor === 0
