@@ -95,6 +95,40 @@ import { TorrentActions } from "../torrents/TorrentActions"
 import { ShareLimitSubmenu, SpeedLimitsSubmenu } from "../torrents/TorrentLimitSubmenus"
 import { createEconomyColumns } from "./EconomyTableColumns"
 
+// Configuration constants for progressive loading and virtualization
+// These can be made configurable in the future via user settings
+const getLoadingConfig = () => ({
+  // Load increment based on total torrent count
+  LOAD_INCREMENT: {
+    LARGE: 500,    // > 10,000 torrents
+    MEDIUM: 200,   // > 5,000 torrents
+    SMALL: 100,    // <= 5,000 torrents
+  },
+  // Initial load size based on total torrent count
+  INITIAL_LOAD: {
+    XLARGE: 1000,  // > 10,000 torrents
+    LARGE: 500,    // > 5,000 torrents
+    MEDIUM: 200,   // > 1,000 torrents
+    SMALL: 100,    // <= 1,000 torrents
+  },
+  // Progressive loading threshold
+  THRESHOLD: {
+    XLARGE: 100,   // > 50,000 torrents
+    LARGE: 50,     // > 10,000 torrents
+    MEDIUM: 25,    // <= 10,000 torrents
+  },
+  // Overscan configuration
+  OVERSCAN: {
+    PAGINATED: 5,      // When using pagination
+    XLARGE: 2,         // > 50,000 torrents
+    LARGE: 3,          // > 10,000 torrents
+    MEDIUM: 5,         // > 1,000 torrents
+    SMALL: 10,         // <= 1,000 torrents
+  },
+})
+
+const LOADING_CONFIG = getLoadingConfig()
+
 // Default values for persisted state hooks (module scope for stable references)
 const DEFAULT_COLUMN_VISIBILITY = {
   name: true,
@@ -508,7 +542,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       setIsLoadingMoreRows(true)
 
       // Load more aggressively for large datasets
-      const loadIncrement = filteredTorrents.length > 10000 ? 500 : filteredTorrents.length > 5000 ? 200 : 100
+      const loadIncrement = filteredTorrents.length > 10000 ? LOADING_CONFIG.LOAD_INCREMENT.LARGE : filteredTorrents.length > 5000 ? LOADING_CONFIG.LOAD_INCREMENT.MEDIUM : LOADING_CONFIG.LOAD_INCREMENT.SMALL
       setLoadedRows(prev => {
         const newLoadedRows = Math.min(prev + loadIncrement, filteredTorrents.length)
         return newLoadedRows
@@ -529,7 +563,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       setLoadedRows(filteredTorrents.length)
     } else {
       // When using progressive loading, start with more rows for large datasets
-      const initialLoad = filteredTorrents.length > 10000 ? 1000 : filteredTorrents.length > 5000 ? 500 : filteredTorrents.length > 1000 ? 200 : 100
+      const initialLoad = filteredTorrents.length > 10000 ? LOADING_CONFIG.INITIAL_LOAD.XLARGE : filteredTorrents.length > 5000 ? LOADING_CONFIG.INITIAL_LOAD.LARGE : filteredTorrents.length > 1000 ? LOADING_CONFIG.INITIAL_LOAD.MEDIUM : LOADING_CONFIG.INITIAL_LOAD.SMALL
       setLoadedRows(prev => Math.min(prev, filteredTorrents.length) || initialLoad)
     }
   }, [totalPages, filteredTorrents.length])
@@ -540,7 +574,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     getScrollElement: () => parentRef.current,
     estimateSize: () => 40,
     // Optimized overscan based on dataset size and pagination mode
-    overscan: totalPages > 1 ? 5 : filteredTorrents.length > 50000 ? 2 : filteredTorrents.length > 10000 ? 3 : filteredTorrents.length > 1000 ? 5 : 10,
+    overscan: totalPages > 1 ? LOADING_CONFIG.OVERSCAN.PAGINATED : filteredTorrents.length > 50000 ? LOADING_CONFIG.OVERSCAN.XLARGE : filteredTorrents.length > 10000 ? LOADING_CONFIG.OVERSCAN.LARGE : filteredTorrents.length > 1000 ? LOADING_CONFIG.OVERSCAN.MEDIUM : LOADING_CONFIG.OVERSCAN.SMALL,
     // Provide a key to help with item tracking - use hash with index for uniqueness
     getItemKey: useCallback((index: number) => {
       const row = rows[index]
@@ -557,7 +591,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
       if (shouldCheckLoadMore && lastItem) {
         // Calculate dynamic threshold based on dataset size
-        const threshold = filteredTorrents.length > 50000 ? 100 : filteredTorrents.length > 10000 ? 50 : 25
+        const threshold = filteredTorrents.length > 50000 ? LOADING_CONFIG.THRESHOLD.XLARGE : filteredTorrents.length > 10000 ? LOADING_CONFIG.THRESHOLD.LARGE : LOADING_CONFIG.THRESHOLD.MEDIUM
 
         if (lastItem.index >= safeLoadedRows - threshold) {
           // Load more if we're near the end of virtual rows OR if we might need more data from backend

@@ -20,6 +20,14 @@ import { getApiBaseUrl } from "./base-url"
 
 const API_BASE = getApiBaseUrl()
 
+// Configuration for API defaults
+const API_DEFAULTS = {
+  ECONOMY_ANALYSIS: {
+    PAGE_SIZE: 25,
+    PAGE: 1,
+  },
+} as const
+
 class ApiClient {
   private async request<T>(
     endpoint: string,
@@ -447,12 +455,12 @@ class ApiClient {
   async getEconomyAnalysis(instanceId: number, page?: number, pageSize?: number, sort?: string, order?: 'asc' | 'desc', filters?: FilterOptions): Promise<EconomyAnalysis> {
     const searchParams = new URLSearchParams()
     
-    // Always include page parameter, defaulting to 1 if not provided
-    const pageValue = page || 1
+    // Always include page parameter, defaulting to configured value if not provided
+    const pageValue = page || API_DEFAULTS.ECONOMY_ANALYSIS.PAGE
     searchParams.set("page", pageValue.toString())
     
-    // Always include pageSize parameter, defaulting to 25 if not provided
-    const pageSizeValue = pageSize || 25
+    // Always include pageSize parameter, defaulting to configured value if not provided
+    const pageSizeValue = pageSize || API_DEFAULTS.ECONOMY_ANALYSIS.PAGE_SIZE
     searchParams.set("pageSize", pageSizeValue.toString())
 
     // Include sorting parameters if provided
