@@ -345,20 +345,19 @@ func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays
 	return retentionScore
 }
 
-// findDuplicates finds duplicate content based on name similarity, size matching, and file overlap
+// findDuplicates finds duplicate content based on name similarity and file overlap
 func (es *EconomyService) findDuplicates(torrents []qbt.Torrent, instanceID int) map[string][]string {
 	duplicates := make(map[string][]string)
 
-	// Group by normalized name and exact size first
+	// Group by normalized name only (no size check)
 	contentGroups := make(map[string][]qbt.Torrent)
 
 	for _, torrent := range torrents {
 		// Normalize name for comparison
 		normalizedName := es.normalizeContentName(torrent.Name)
 
-		// Use exact size for duplicate detection - duplicates must have identical sizes
-		key := fmt.Sprintf("%s_%d", normalizedName, torrent.Size)
-		contentGroups[key] = append(contentGroups[key], torrent)
+		// Group only by normalized name - let file comparison determine duplicates
+		contentGroups[normalizedName] = append(contentGroups[normalizedName], torrent)
 	}
 
 	// For groups with multiple torrents, check file overlap
