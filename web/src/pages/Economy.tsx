@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EconomyDashboard } from "@/components/dashboard/EconomyDashboard"
 import { api } from "@/lib/api"
-import type { FilterOptions } from "@/types"
 import { Loader2, TrendingUp, AlertCircle } from "lucide-react"
 
 export function Economy() {
@@ -20,12 +19,6 @@ export function Economy() {
   const [pageSize, setPageSize] = useState(25) // Increased default page size for better performance
   const [sortField, setSortField] = useState<string>("economyScore")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [filters, setFilters] = useState<FilterOptions>({
-    status: [],
-    categories: [],
-    tags: [],
-    trackers: []
-  })
 
   // Get all instances
   const { data: instances, isLoading: instancesLoading } = useQuery({
@@ -35,12 +28,12 @@ export function Economy() {
 
   // Get economy analysis for selected instance with pagination, sorting, and filtering
   const { data: economyData, isLoading: economyLoading, error } = useQuery({
-    queryKey: ["economy-analysis", selectedInstanceId, currentPage, pageSize, sortField, sortOrder, filters],
+    queryKey: ["economy-analysis", selectedInstanceId, currentPage, pageSize, sortField, sortOrder],
     queryFn: () => {
       if (!selectedInstanceId) return null
       
-      // Send all parameters to ensure proper backend filtering and sorting
-      return api.getEconomyAnalysis(selectedInstanceId, currentPage, pageSize, sortField, sortOrder, filters)
+      // Send sorting parameters to ensure proper backend sorting
+      return api.getEconomyAnalysis(selectedInstanceId, currentPage, pageSize, sortField, sortOrder)
     },
     enabled: selectedInstanceId !== null,
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -57,12 +50,6 @@ export function Economy() {
     setSortField(field)
     setSortOrder(desc ? 'desc' : 'asc')
     setCurrentPage(1) // Reset to first page when sorting changes
-  }
-
-  // Handle filter changes
-  const handleFiltersChange = (newFilters: FilterOptions) => {
-    setFilters(newFilters)
-    setCurrentPage(1) // Reset to first page when filters change
   }
 
   // Reset pagination when instance changes
