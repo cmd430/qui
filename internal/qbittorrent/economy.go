@@ -17,46 +17,46 @@ import (
 
 // EconomyScore represents a torrent's economy score and related metrics
 type EconomyScore struct {
-	Hash                string    `json:"hash"`
-	Name                string    `json:"name"`
-	Size                int64     `json:"size"`
-	Seeds               int       `json:"seeds"`
-	Peers               int       `json:"peers"`
-	Ratio               float64   `json:"ratio"`
-	Age                 int64     `json:"age"` // Age in days
-	EconomyScore        float64   `json:"economyScore"`
-	StorageValue        float64   `json:"storageValue"`
-	RarityBonus         float64   `json:"rarityBonus"`
-	DeduplicationFactor float64   `json:"deduplicationFactor"`
-	Duplicates          []string  `json:"duplicates,omitempty"` // Hash of duplicate torrents
-	Tracker             string    `json:"tracker"`
-	State               string    `json:"state"`
-	Category            string    `json:"category"`
-	LastActivity        int64     `json:"lastActivity"`
+	Hash                string   `json:"hash"`
+	Name                string   `json:"name"`
+	Size                int64    `json:"size"`
+	Seeds               int      `json:"seeds"`
+	Peers               int      `json:"peers"`
+	Ratio               float64  `json:"ratio"`
+	Age                 int64    `json:"age"` // Age in days
+	EconomyScore        float64  `json:"economyScore"`
+	StorageValue        float64  `json:"storageValue"`
+	RarityBonus         float64  `json:"rarityBonus"`
+	DeduplicationFactor float64  `json:"deduplicationFactor"`
+	Duplicates          []string `json:"duplicates,omitempty"` // Hash of duplicate torrents
+	Tracker             string   `json:"tracker"`
+	State               string   `json:"state"`
+	Category            string   `json:"category"`
+	LastActivity        int64    `json:"lastActivity"`
 }
 
 // EconomyStats represents aggregated economy statistics
 type EconomyStats struct {
-	TotalTorrents         int     `json:"totalTorrents"`
-	TotalStorage          int64   `json:"totalStorage"`
-	DeduplicatedStorage   int64   `json:"deduplicatedStorage"`
-	StorageSavings        int64   `json:"storageSavings"`
-	AverageEconomyScore   float64 `json:"averageEconomyScore"`
-	HighValueTorrents     int     `json:"highValueTorrents"`
-	RareContentCount      int     `json:"rareContentCount"`
-	WellSeededOldContent  int     `json:"wellSeededOldContent"`
+	TotalTorrents        int     `json:"totalTorrents"`
+	TotalStorage         int64   `json:"totalStorage"`
+	DeduplicatedStorage  int64   `json:"deduplicatedStorage"`
+	StorageSavings       int64   `json:"storageSavings"`
+	AverageEconomyScore  float64 `json:"averageEconomyScore"`
+	HighValueTorrents    int     `json:"highValueTorrents"`
+	RareContentCount     int     `json:"rareContentCount"`
+	WellSeededOldContent int     `json:"wellSeededOldContent"`
 }
 
 // OptimizationOpportunity represents a specific optimization opportunity
 type OptimizationOpportunity struct {
-	Type        string  `json:"type"`        // "cross_seeding_opportunity", "old_content_cleanup", "ratio_optimization", etc.
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Priority    string  `json:"priority"`    // "high", "medium", "low"
-	Savings     int64   `json:"savings"`     // Storage savings in bytes
-	Impact      float64 `json:"impact"`      // Impact score (0-100)
-	Torrents    []string `json:"torrents"`   // Affected torrent hashes
-	Category    string  `json:"category"`    // "storage", "seeding", "ratio"
+	Type        string   `json:"type"` // "cross_seeding_opportunity", "old_content_cleanup", "ratio_optimization", etc.
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Priority    string   `json:"priority"` // "high", "medium", "low"
+	Savings     int64    `json:"savings"`  // Storage savings in bytes
+	Impact      float64  `json:"impact"`   // Impact score (0-100)
+	Torrents    []string `json:"torrents"` // Affected torrent hashes
+	Category    string   `json:"category"` // "storage", "seeding", "ratio"
 }
 
 // StorageOptimization represents storage-related optimization data
@@ -70,12 +70,12 @@ type StorageOptimization struct {
 
 // EconomyAnalysis represents the complete economy analysis
 type EconomyAnalysis struct {
-	Scores           []EconomyScore           `json:"scores"`
-	Stats            EconomyStats             `json:"stats"`
-	TopValuable      []EconomyScore           `json:"topValuable"`
-	Duplicates       map[string][]string      `json:"duplicates"` // Map of content hash to torrent hashes
-	Optimizations    []OptimizationOpportunity `json:"optimizations"`
-	StorageOptimization StorageOptimization   `json:"storageOptimization"`
+	Scores              []EconomyScore            `json:"scores"`
+	Stats               EconomyStats              `json:"stats"`
+	TopValuable         []EconomyScore            `json:"topValuable"`
+	Duplicates          map[string][]string       `json:"duplicates"` // Map of content hash to torrent hashes
+	Optimizations       []OptimizationOpportunity `json:"optimizations"`
+	StorageOptimization StorageOptimization       `json:"storageOptimization"`
 }
 
 // EconomyService handles torrent economy calculations

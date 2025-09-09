@@ -15,13 +15,14 @@ import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle, Trash2 } from "lucide-react"
 import type { EconomyAnalysis } from "@/types"
 import { useState } from "react"
+import { api } from "@/lib/api"
 
 interface EconomyDashboardProps {
   analysis: EconomyAnalysis
   instanceId: number
 }
 
-export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
+export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps) {
   const { stats, topValuable, optimizations, storageOptimization } = analysis
   const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
   const [isRemoving, setIsRemoving] = useState(false)
@@ -56,12 +57,11 @@ export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
 
     setIsRemoving(true)
     try {
-      // Here you would implement the actual removal logic
-      // For now, we'll just simulate the removal
-      console.log('Removing torrents:', Array.from(selectedTorrents))
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await api.bulkAction(instanceId, {
+        hashes: Array.from(selectedTorrents),
+        action: "delete",
+        deleteFiles: false, // Also delete files from disk 
+      })
       
       // Clear selection after successful removal
       setSelectedTorrents(new Set())
@@ -73,6 +73,31 @@ export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
       console.error('Failed to remove torrents:', error)
     } finally {
       setIsRemoving(false)
+    }
+  }
+
+  const handleRemoveTorrent = async (hash: string) => {
+    try {
+      await api.bulkAction(instanceId, {
+        hashes: [hash],
+        action: "delete",
+        deleteFiles: true,
+      })
+      // Could add a success notification here
+    } catch (error) {
+      console.error('Failed to remove torrent:', error)
+    }
+  }
+
+  const handleRecheckTorrent = async (hash: string) => {
+    try {
+      await api.bulkAction(instanceId, {
+        hashes: [hash],
+        action: "recheck",
+      })
+      // Could add a success notification here
+    } catch (error) {
+      console.error('Failed to recheck torrent:', error)
     }
   }
 
@@ -570,10 +595,18 @@ export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
                               <Button variant="outline" size="sm">
                                 Keep Torrent
                               </Button>
-                              <Button variant="destructive" size="sm">
+                              <Button 
+                                variant="destructive" 
+                                size="sm"
+                                onClick={() => handleRemoveTorrent(torrent.hash)}
+                              >
                                 Remove Torrent
                               </Button>
-                              <Button variant="secondary" size="sm">
+                              <Button 
+                                variant="secondary" 
+                                size="sm"
+                                onClick={() => handleRecheckTorrent(torrent.hash)}
+                              >
                                 Recheck Ratio
                               </Button>
                             </div>
