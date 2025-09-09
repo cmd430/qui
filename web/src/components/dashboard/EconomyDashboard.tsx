@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatBytes } from "@/lib/utils"
-import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
+import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle, BarChart3, TrendingDown } from "lucide-react"
 import type { EconomyAnalysis, TorrentGroup } from "@/types"
 import { useState, useCallback, useMemo } from "react"
 import { TorrentGroupCard } from "./TorrentGroupCard"
@@ -89,88 +90,71 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
 
   return (
     <div className="space-y-6">
-      {/* Economy Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Storage Value</CardTitle>
+      {/* Compact Overview Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Total Storage</p>
+              <p className="text-lg font-bold">{formatBytes(stats.totalStorage)}</p>
+            </div>
             <HardDrive className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatBytes(stats.totalStorage)}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.totalTorrents} torrents analyzed
-            </p>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deduplicated Storage</CardTitle>
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Deduplicated</p>
+              <p className="text-lg font-bold">{formatBytes(stats.deduplicatedStorage)}</p>
+            </div>
             <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatBytes(stats.deduplicatedStorage)}</div>
-            <p className="text-xs text-muted-foreground">
-              {formatBytes(stats.storageSavings)} saved
-            </p>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average Economy Score</CardTitle>
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Avg Economy Score</p>
+              <p className="text-lg font-bold">{stats.averageEconomyScore.toFixed(1)}</p>
+            </div>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.averageEconomyScore.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.highValueTorrents} high-value torrents
-            </p>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rare Content</CardTitle>
+        <Card className="p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Rare Content</p>
+              <p className="text-lg font-bold">{stats.rareContentCount}</p>
+            </div>
             <Star className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.rareContentCount}</div>
-            <p className="text-xs text-muted-foreground">
-              Low seed count torrents
-            </p>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
-      {/* Storage Efficiency */}
+      {/* Storage Efficiency - Compact */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Zap className="h-4 w-4" />
             Storage Efficiency
           </CardTitle>
-          <CardDescription>
-            Deduplication analysis showing potential storage savings
-          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Deduplication Efficiency</span>
-              <span className="text-sm text-muted-foreground">
-                {((stats.storageSavings / stats.totalStorage) * 100).toFixed(1)}% saved
-              </span>
-            </div>
-            <Progress
-              value={(stats.deduplicatedStorage / stats.totalStorage) * 100}
-              className="h-2"
-            />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Deduplicated: {formatBytes(stats.deduplicatedStorage)}</span>
-              <span>Total: {formatBytes(stats.totalStorage)}</span>
-            </div>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span>Deduplication Efficiency</span>
+            <span className="font-medium">
+              {((stats.storageSavings / stats.totalStorage) * 100).toFixed(1)}% saved
+            </span>
+          </div>
+          <Progress
+            value={(stats.deduplicatedStorage / stats.totalStorage) * 100}
+            className="h-2"
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Deduplicated: {formatBytes(stats.deduplicatedStorage)}</span>
+            <span>Total: {formatBytes(stats.totalStorage)}</span>
           </div>
         </CardContent>
       </Card>
@@ -188,25 +172,25 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3 max-h-96 overflow-y-auto">
               {optimizations.map((opportunity, index) => (
-                <div key={index} className="border rounded-lg p-4">
+                <div key={index} className="border rounded-lg p-3">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-semibold">{opportunity.title}</h4>
+                      <h4 className="font-semibold text-sm">{opportunity.title}</h4>
                       <Badge
                         variant={
                           opportunity.priority === "high" ? "destructive" :
                           opportunity.priority === "medium" ? "default" : "secondary"
                         }
+                        className="text-xs"
                       >
                         {opportunity.priority}
                       </Badge>
-                      <Badge variant="outline">{opportunity.category}</Badge>
                     </div>
                     <div className="text-right">
                       <div className="text-sm font-medium">
-                        {opportunity.savings > 0 ? "+" : ""}{formatBytes(opportunity.savings)}
+                        {formatBytes(opportunity.savings)}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {opportunity.impact.toFixed(1)}% impact
@@ -220,8 +204,8 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                     </div>
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          View Details
+                        <Button variant="outline" size="sm" className="text-xs h-7">
+                          Details
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -322,7 +306,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                 <p className="text-sm text-muted-foreground">Total Potential Savings</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Deduplication</span>
@@ -336,7 +320,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Old Content Cleanup</span>
+                    <span>Old Content</span>
                     <span className="font-medium">{formatBytes(storageOptimization.oldContentCleanupSavings)}</span>
                   </div>
                   <Progress
@@ -347,7 +331,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Ratio Optimization</span>
+                    <span>Ratio Opt.</span>
                     <span className="font-medium">{formatBytes(storageOptimization.ratioOptimizationSavings)}</span>
                   </div>
                   <Progress
@@ -358,7 +342,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
 
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Unused Content</span>
+                    <span>Unused</span>
                     <span className="font-medium">{formatBytes(storageOptimization.unusedContentSavings)}</span>
                   </div>
                   <Progress
@@ -407,7 +391,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                       {torrent.seeds}
                     </Badge>
                   </TableCell>
-                  <TableCell>{torrent.age}</TableCell>
+                  <TableCell>{torrent.age}d</TableCell>
                   <TableCell className="font-semibold text-green-600">
                     {torrent.economyScore.toFixed(2)}
                   </TableCell>
@@ -534,10 +518,10 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                             {torrent.seeds}
                           </Badge>
                         </TableCell>
-                        <TableCell>{torrent.age}</TableCell>
+                        <TableCell>{torrent.age}d</TableCell>
                         <TableCell className="font-semibold text-red-600">
                           {torrent.economyScore === 0 ? (
-                            <span className="text-gray-500">0.00 (Duplicate)</span>
+                            <span className="text-gray-500">0.00 (Dup)</span>
                           ) : (
                             torrent.economyScore.toFixed(2)
                           )}
