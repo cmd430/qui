@@ -342,7 +342,6 @@ export function TorrentGroupCard({
             <TorrentActions
               instanceId={instanceId}
               selectedHashes={selectedHashesInGroup}
-              selectedTorrents={group.torrents.filter(torrent => selectedTorrents.has(torrent.hash))}
               onComplete={handleComplete}
             />
           </div>
