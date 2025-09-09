@@ -84,11 +84,12 @@ import { useSearch } from "@tanstack/react-router"
 import { CheckCircle, Columns3, Copy, Eye, EyeOff, Folder, Loader2, Pause, Play, Radio, Tag, Trash2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { Pagination } from "@/components/ui/pagination"
+import { AddTagsDialog, RemoveTagsDialog, SetCategoryDialog, SetTagsDialog } from "../torrents/TorrentDialogs"
 import { AddTorrentDialog } from "../torrents/AddTorrentDialog"
 import { DraggableTableHeader } from "../torrents/DraggableTableHeader"
 import { QueueSubmenu } from "../torrents/QueueSubmenu"
 import { TorrentActions } from "../torrents/TorrentActions"
-import { AddTagsDialog, RemoveTagsDialog, SetCategoryDialog, SetTagsDialog } from "../torrents/TorrentDialogs"
 import { ShareLimitSubmenu, SpeedLimitsSubmenu } from "../torrents/TorrentLimitSubmenus"
 import { createEconomyColumns } from "./EconomyTableColumns"
 
@@ -103,6 +104,8 @@ const DEFAULT_COLUMN_VISIBILITY = {
   state: true,
   category: true,
   tracker: false,
+  deduplicationFactor: true,
+  group: true,
 }
 const DEFAULT_COLUMN_SIZING = {}
 
@@ -146,7 +149,7 @@ interface EconomyDashboardProps {
 
 export const EconomyDashboard = memo(function EconomyDashboard({ analysis, instanceId, onPageChange }: EconomyDashboardProps) {
   // State management
-  const [sorting, setSorting] = usePersistedColumnSorting([])
+  const [sorting, setSorting] = usePersistedColumnSorting([{ id: "economyScore", desc: true }])
   const [globalFilter, setGlobalFilter] = useState("")
   const [immediateSearch] = useState("")
   const [rowSelection, setRowSelection] = useState({})
@@ -417,8 +420,13 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const { rows } = table.getRowModel()
   const parentRef = useRef<HTMLDivElement>(null)
 
-  // Load more rows as user scrolls (progressive loading + backend pagination)
+  // Load more rows as user scrolls (only for progressive loading, not when using pagination)
   const loadMore = useCallback((): void => {
+    // If we have pagination, don't do progressive loading
+    if (totalPages > 1) {
+      return
+    }
+
     // First, try to load more from virtual scrolling if we have more local data
     if (loadedRows < sortedTorrents.length) {
       // Prevent concurrent loads
@@ -441,24 +449,24 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     }
   }, [sortedTorrents.length, isLoadingMoreRows, loadedRows, page, totalPages, pageSize, onPageChange])
 
-  // Ensure loadedRows never exceeds actual data length
-  const safeLoadedRows = Math.min(loadedRows, rows.length)
-
-  // Also keep loadedRows in sync with actual data to prevent status display issues
+  // Update loadedRows based on pagination mode
   useEffect(() => {
-    if (loadedRows > rows.length && rows.length > 0) {
-      setLoadedRows(rows.length)
+    if (totalPages > 1) {
+      // When using pagination, load all current page data
+      setLoadedRows(sortedTorrents.length)
+    } else {
+      // When using progressive loading, start with 100
+      setLoadedRows(prev => Math.min(prev, sortedTorrents.length) || 100)
     }
-  }, [loadedRows, rows.length])
+  }, [totalPages, sortedTorrents.length])
 
   // useVirtualizer must be called at the top level, not inside useMemo
   const virtualizer = useVirtualizer({
     count: safeLoadedRows,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 40,
-    // Optimized overscan based on TanStack Virtual recommendations
-    // Start small and adjust based on dataset size and performance
-    overscan: sortedTorrents.length > 50000 ? 3 : sortedTorrents.length > 10000 ? 5 : sortedTorrents.length > 1000 ? 10 : 15,
+    // Optimized overscan based on dataset size and pagination mode
+    overscan: totalPages > 1 ? 5 : sortedTorrents.length > 50000 ? 3 : sortedTorrents.length > 10000 ? 5 : sortedTorrents.length > 1000 ? 10 : 15,
     // Provide a key to help with item tracking - use hash with index for uniqueness
     getItemKey: useCallback((index: number) => {
       const row = rows[index]
@@ -1325,6 +1333,10 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
               </>
             ) : totalItems === 0 ? (
               "No torrents found"
+            ) : totalPages > 1 ? (
+              <>
+                Showing page {page} of {totalPages} ({sortedTorrents.length} torrents)
+              </>
             ) : (
               <>
                 {sortedTorrents.length} torrent{sortedTorrents.length !== 1 ? "s" : ""} needing review
@@ -1368,6 +1380,21 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
           </div>
         </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="border-t p-4">
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={totalItems}
+            onPageChange={onPageChange || (() => {})}
+            showPageSizeSelector={false}
+            showPageJump={true}
+          />
+        </div>
+      )}
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>

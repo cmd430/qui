@@ -235,16 +235,71 @@ export function createEconomyColumns(
       },
     },
     {
-      accessorKey: "tracker",
-      header: "Tracker",
-      cell: ({ row }: any) => (
-        <div className="max-w-32 truncate text-xs" title={row.original.tracker}>
-          {row.original.tracker}
-        </div>
-      ),
-      size: 150,
+      accessorKey: "deduplicationFactor",
+      header: "Deduplication",
+      cell: ({ row }: any) => {
+        const factor = row.original.deduplicationFactor
+        const isDuplicate = factor === 0
+
+        if (isDuplicate) {
+          return (
+            <div className="text-center">
+              <Badge variant="destructive" className="text-xs">
+                Duplicate
+              </Badge>
+            </div>
+          )
+        }
+
+        return (
+          <div className="text-center">
+            <div className={`font-medium ${factor > 0.8 ? "text-green-600" : factor > 0.5 ? "text-yellow-600" : "text-red-600"}`}>
+              {(factor * 100).toFixed(0)}%
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {formatBytes(row.original.storageValue * (1 - factor))} saved
+            </div>
+          </div>
+        )
+      },
+      size: 120,
       meta: {
-        headerString: "Tracker",
+        headerString: "Deduplication",
+      },
+    },
+    {
+      accessorKey: "group",
+      header: "Group",
+      cell: ({ row }: any) => {
+        const torrent = row.original
+        const isDuplicate = torrent.deduplicationFactor === 0
+
+        if (isDuplicate) {
+          return (
+            <Badge variant="outline" className="text-xs">
+              Duplicate Group
+            </Badge>
+          )
+        }
+
+        // For now, show if it has duplicates
+        if (torrent.duplicates && torrent.duplicates.length > 0) {
+          return (
+            <Badge variant="secondary" className="text-xs">
+              {torrent.duplicates.length + 1} items
+            </Badge>
+          )
+        }
+
+        return (
+          <Badge variant="outline" className="text-xs">
+            Individual
+          </Badge>
+        )
+      },
+      size: 100,
+      meta: {
+        headerString: "Group",
       },
     },
   ]
