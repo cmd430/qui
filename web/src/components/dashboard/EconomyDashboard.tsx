@@ -27,6 +27,7 @@ import {
 import {
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   useReactTable
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -66,6 +67,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Tooltip,
   TooltipContent,
@@ -77,11 +80,12 @@ import {
   getLinuxIsoName,
   useIncognitoMode
 } from "@/lib/incognito"
+import { formatBytes } from "@/lib/utils"
 
 import type { EconomyScore, TorrentGroup } from "@/types"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSearch } from "@tanstack/react-router"
-import { CheckCircle, Columns3, Copy, Eye, EyeOff, Folder, Loader2, Pause, Play, Radio, Tag, Trash2 } from "lucide-react"
+import { CheckCircle, Columns3, Copy, Eye, EyeOff, Filter, Calculator, Folder, Loader2, Pause, Play, Radio, Tag, Trash2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { Pagination } from "@/components/ui/pagination"
@@ -165,6 +169,13 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const [showReannounceDialog, setShowReannounceDialog] = useState(false)
   const [showRefetchIndicator, setShowRefetchIndicator] = useState(false)
 
+  // Preview and filtering state
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false)
+  const [filterScoreMin, setFilterScoreMin] = useState<number | "">("")
+  const [filterScoreMax, setFilterScoreMax] = useState<number | "">("")
+  const [filterDeduplicationMin, setFilterDeduplicationMin] = useState<number | "">("")
+  const [filterDeduplicationMax, setFilterDeduplicationMax] = useState<number | "">("")
+
   // Custom "select all" state for handling large datasets
   const [isAllSelected, setIsAllSelected] = useState(false)
   const [excludedFromSelectAll, setExcludedFromSelectAll] = useState<Set<string>>(new Set())
@@ -190,6 +201,9 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   // Progressive loading state with async management
   const [loadedRows, setLoadedRows] = useState(100)
   const [isLoadingMoreRows, setIsLoadingMoreRows] = useState(false)
+
+  // Safe loaded rows to prevent virtualizer issues
+  const safeLoadedRows = useMemo(() => Math.min(loadedRows, filteredTorrents.length), [loadedRows, filteredTorrents.length])
 
   // Query client for invalidating queries
   const queryClient = useQueryClient()
@@ -259,6 +273,33 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   // Use torrents directly from analysis
   const sortedTorrents = currentTorrents
 
+  // Custom filtering logic
+  const filteredTorrents = useMemo(() => {
+    let filtered = sortedTorrents
+
+    // Filter by economy score
+    if (filterScoreMin !== "" || filterScoreMax !== "") {
+      filtered = filtered.filter(torrent => {
+        const score = torrent.economyScore
+        const minCheck = filterScoreMin === "" || score >= filterScoreMin
+        const maxCheck = filterScoreMax === "" || score <= filterScoreMax
+        return minCheck && maxCheck
+      })
+    }
+
+    // Filter by deduplication factor
+    if (filterDeduplicationMin !== "" || filterDeduplicationMax !== "") {
+      filtered = filtered.filter(torrent => {
+        const factor = torrent.deduplicationFactor
+        const minCheck = filterDeduplicationMin === "" || factor >= filterDeduplicationMin
+        const maxCheck = filterDeduplicationMax === "" || factor <= filterDeduplicationMax
+        return minCheck && maxCheck
+      })
+    }
+
+    return filtered
+  }, [sortedTorrents, filterScoreMin, filterScoreMax, filterDeduplicationMin, filterDeduplicationMax])
+
   // Custom selection handlers for "select all" functionality
   const handleSelectAll = useCallback(() => {
     // Gmail-style behavior: if any rows are selected, always deselect all
@@ -308,8 +349,8 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     }
     const regularSelectionCount = Object.keys(rowSelection)
       .filter((key: string) => (rowSelection as Record<string, boolean>)[key]).length
-    return regularSelectionCount === sortedTorrents.length && sortedTorrents.length > 0
-  }, [isAllSelected, excludedFromSelectAll.size, rowSelection, sortedTorrents.length])
+    return regularSelectionCount === filteredTorrents.length && filteredTorrents.length > 0
+  }, [isAllSelected, excludedFromSelectAll.size, rowSelection, filteredTorrents.length])
 
   const isSelectAllIndeterminate = useMemo(() => {
     // Show indeterminate (dash) when SOME but not ALL items are selected
@@ -322,8 +363,8 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       .filter((key: string) => (rowSelection as Record<string, boolean>)[key]).length
 
     // Indeterminate when some (but not all) are selected
-    return regularSelectionCount > 0 && regularSelectionCount < sortedTorrents.length
-  }, [isAllSelected, excludedFromSelectAll.size, rowSelection, sortedTorrents.length])
+    return regularSelectionCount > 0 && regularSelectionCount < filteredTorrents.length
+  }, [isAllSelected, excludedFromSelectAll.size, rowSelection, filteredTorrents.length])
 
   // Memoize columns to avoid unnecessary recalculations
   const columns = useMemo(
@@ -344,9 +385,10 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   )
 
   const table = useReactTable({
-    data: sortedTorrents,
+    data: filteredTorrents,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     // Use torrent hash with index as unique row ID to handle duplicates
     getRowId: (row: EconomyScore, index: number) => `${row.hash}-${index}`,
     // State management
@@ -380,8 +422,8 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       // When all are selected, return all currently loaded hashes minus exclusions
       // This is needed for actions to work properly
       return sortedTorrents
-        .map(t => t.hash)
-        .filter(hash => !excludedFromSelectAll.has(hash))
+        .map((t: EconomyScore) => t.hash)
+        .filter((hash: string) => !excludedFromSelectAll.has(hash))
     } else {
       // Regular selection mode - get hashes from selected torrents directly
       const tableRows = table.getRowModel().rows
@@ -389,7 +431,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
         .filter(row => (rowSelection as Record<string, boolean>)[row.id])
         .map(row => row.original.hash)
     }
-  }, [rowSelection, isAllSelected, excludedFromSelectAll, sortedTorrents, table])
+  }, [rowSelection, isAllSelected, excludedFromSelectAll, filteredTorrents, table])
 
   // Calculate the effective selection count for display
   const effectiveSelectionCount = useMemo(() => {
@@ -407,7 +449,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const selectedTorrents = useMemo((): EconomyScore[] => {
     if (isAllSelected) {
       // When all are selected, return all torrents minus exclusions
-      return sortedTorrents.filter(t => !excludedFromSelectAll.has(t.hash))
+      return sortedTorrents.filter((t: EconomyScore) => !excludedFromSelectAll.has(t.hash))
     } else {
       // Regular selection mode
       return selectedHashes
@@ -428,7 +470,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     }
 
     // First, try to load more from virtual scrolling if we have more local data
-    if (loadedRows < sortedTorrents.length) {
+    if (loadedRows < filteredTorrents.length) {
       // Prevent concurrent loads
       if (isLoadingMoreRows) {
         return
@@ -437,7 +479,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       setIsLoadingMoreRows(true)
 
       setLoadedRows(prev => {
-        const newLoadedRows = Math.min(prev + 100, sortedTorrents.length)
+        const newLoadedRows = Math.min(prev + 100, filteredTorrents.length)
         return newLoadedRows
       })
 
@@ -447,18 +489,18 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       // If we've displayed all local data but there's more on backend, load next page
       onPageChange(page + 1, pageSize)
     }
-  }, [sortedTorrents.length, isLoadingMoreRows, loadedRows, page, totalPages, pageSize, onPageChange])
+  }, [filteredTorrents.length, isLoadingMoreRows, loadedRows, page, totalPages, pageSize, onPageChange])
 
   // Update loadedRows based on pagination mode
   useEffect(() => {
     if (totalPages > 1) {
       // When using pagination, load all current page data
-      setLoadedRows(sortedTorrents.length)
+      setLoadedRows(filteredTorrents.length)
     } else {
       // When using progressive loading, start with 100
-      setLoadedRows(prev => Math.min(prev, sortedTorrents.length) || 100)
+      setLoadedRows(prev => Math.min(prev, filteredTorrents.length) || 100)
     }
-  }, [totalPages, sortedTorrents.length])
+  }, [totalPages, filteredTorrents.length])
 
   // useVirtualizer must be called at the top level, not inside useMemo
   const virtualizer = useVirtualizer({
@@ -466,7 +508,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     getScrollElement: () => parentRef.current,
     estimateSize: () => 40,
     // Optimized overscan based on dataset size and pagination mode
-    overscan: totalPages > 1 ? 5 : sortedTorrents.length > 50000 ? 3 : sortedTorrents.length > 10000 ? 5 : sortedTorrents.length > 1000 ? 10 : 15,
+    overscan: totalPages > 1 ? 5 : filteredTorrents.length > 50000 ? 3 : filteredTorrents.length > 10000 ? 5 : filteredTorrents.length > 1000 ? 10 : 15,
     // Provide a key to help with item tracking - use hash with index for uniqueness
     getItemKey: useCallback((index: number) => {
       const row = rows[index]
@@ -512,10 +554,10 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   // Reset loaded rows when data changes significantly
   useEffect(() => {
     // Always ensure loadedRows is at least 100 (or total length if less)
-    const targetRows = Math.min(100, sortedTorrents.length)
+    const targetRows = Math.min(100, filteredTorrents.length)
 
     setLoadedRows(prev => {
-      if (sortedTorrents.length === 0) {
+      if (filteredTorrents.length === 0) {
         // No data, reset to 0
         return 0
       } else if (prev === 0) {
@@ -532,7 +574,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
     // Force virtualizer to recalculate
     virtualizer.measure()
-  }, [sortedTorrents.length, virtualizer])
+  }, [filteredTorrents.length, virtualizer])
 
   // Reset when filters or search changes
   useEffect(() => {
@@ -540,7 +582,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     const isRecentUserAction = lastUserAction && (Date.now() - lastUserAction.timestamp < 1000)
 
     if (isRecentUserAction) {
-      const targetRows = Math.min(100, sortedTorrents.length || 0)
+      const targetRows = Math.min(100, filteredTorrents.length || 0)
       setLoadedRows(targetRows)
       setIsLoadingMoreRows(false)
 
@@ -563,7 +605,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
         virtualizer.measure()
       }, 0)
     }
-  }, [effectiveSearch, instanceId, virtualizer, sortedTorrents.length, setRowSelection, lastUserAction])
+  }, [effectiveSearch, instanceId, virtualizer, filteredTorrents.length, setRowSelection, lastUserAction])
 
   // Mutation for bulk actions
   const mutation = useMutation({
@@ -919,12 +961,130 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       <div className="flex flex-col gap-2 flex-shrink-0">
         {/* Search bar row */}
         <div className="flex items-center gap-1 sm:gap-2">
-          {/* Filter button - only on desktop */}
+          {/* Filter button */}
           <div className="hidden xl:block">
-            {/* Economy dashboard doesn't have filters for now */}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className={`relative ${filterScoreMin !== "" || filterScoreMax !== "" || filterDeduplicationMin !== "" || filterDeduplicationMax !== "" ? "border-primary" : ""}`}
+                    >
+                      <Filter className="h-4 w-4" />
+                      {(filterScoreMin !== "" || filterScoreMax !== "" || filterDeduplicationMin !== "" || filterDeduplicationMax !== "") && (
+                        <span className="absolute -top-1 -right-1 h-2 w-2 bg-primary rounded-full" />
+                      )}
+                      <span className="sr-only">Filter torrents</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Filter torrents</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="w-80">
+                <DropdownMenuLabel>Filter Torrents</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <div className="p-4 space-y-4">
+                  <div>
+                    <Label htmlFor="score-min" className="text-sm font-medium">Economy Score Range</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        id="score-min"
+                        type="number"
+                        placeholder="Min"
+                        value={filterScoreMin}
+                        onChange={(e) => setFilterScoreMin(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground self-center">to</span>
+                      <Input
+                        id="score-max"
+                        type="number"
+                        placeholder="Max"
+                        value={filterScoreMax}
+                        onChange={(e) => setFilterScoreMax(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                        className="w-20"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="dedup-min" className="text-sm font-medium">Deduplication Factor Range</Label>
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        id="dedup-min"
+                        type="number"
+                        placeholder="Min"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={filterDeduplicationMin}
+                        onChange={(e) => setFilterDeduplicationMin(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground self-center">to</span>
+                      <Input
+                        id="dedup-max"
+                        type="number"
+                        placeholder="Max"
+                        min="0"
+                        max="1"
+                        step="0.1"
+                        value={filterDeduplicationMax}
+                        onChange={(e) => setFilterDeduplicationMax(e.target.value === "" ? "" : parseFloat(e.target.value) || "")}
+                        className="w-20"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFilterScoreMin("")
+                        setFilterScoreMax("")
+                        setFilterDeduplicationMin("")
+                        setFilterDeduplicationMax("")
+                      }}
+                      className="flex-1"
+                    >
+                      Clear Filters
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setFilterScoreMin(0)
+                        setFilterScoreMax(2)
+                      }}
+                      className="flex-1"
+                    >
+                      Low Value (Score &lt; 2.0)
+                    </Button>
+                  </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           {/* Action buttons */}
           <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+            {/* Preview button */}
+            {effectiveSelectionCount > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowPreviewDialog(true)}
+                  >
+                    <Calculator className="h-4 w-4" />
+                    <span className="sr-only">Impact analysis</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>View detailed impact analysis</TooltipContent>
+              </Tooltip>
+            )}
+
             {(() => {
               const actions = effectiveSelectionCount > 0 ? (
                 <TorrentActions
@@ -1063,10 +1223,15 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
             </div>
 
             {/* Body */}
-            {sortedTorrents.length === 0 ? (
+            {filteredTorrents.length === 0 ? (
               // Show empty state
               <div className="p-8 text-center text-muted-foreground">
-                <p>No torrents needing review found</p>
+                <p>No torrents found matching the current filters</p>
+                {(filterScoreMin !== "" || filterScoreMax !== "" || filterDeduplicationMin !== "" || filterDeduplicationMax !== "") && (
+                  <p className="text-sm mt-2">
+                    Try adjusting your filters to see more results
+                  </p>
+                )}
               </div>
             ) : (
               // Show virtual table
@@ -1335,17 +1500,17 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
               "No torrents found"
             ) : totalPages > 1 ? (
               <>
-                Showing page {page} of {totalPages} ({sortedTorrents.length} torrents)
+                Showing page {page} of {totalPages} ({filteredTorrents.length} torrents)
               </>
             ) : (
               <>
-                {sortedTorrents.length} torrent{sortedTorrents.length !== 1 ? "s" : ""} needing review
+                {filteredTorrents.length} torrent{filteredTorrents.length !== 1 ? "s" : ""} needing review
                 {hasLoadedAll ? (
                   ""
                 ) : isLoadingMoreRows ? (
                   " (loading more...)"
                 ) : (
-                  ` (${sortedTorrents.length} of ${totalItems} loaded • Scroll to load more)`
+                  ` (${filteredTorrents.length} of ${totalItems} loaded • Scroll to load more)`
                 )}
               </>
             )}
@@ -1506,6 +1671,250 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
             </Button>
             <Button onClick={handleReannounce} disabled={mutation.isPending}>
               Reannounce
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Impact Analysis Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Impact Analysis</DialogTitle>
+            <DialogDescription>
+              Comprehensive analysis of removing duplicate torrents from your selection.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            {(() => {
+              const selectedTorrents = selectedHashes.map(hash =>
+                filteredTorrents.find(t => t.hash === hash)
+              ).filter(Boolean) as EconomyScore[]
+
+              const totalSize = selectedTorrents.reduce((sum, t) => sum + t.size, 0)
+              const totalStorageValue = selectedTorrents.reduce((sum, t) => sum + t.storageValue, 0)
+              const duplicates = selectedTorrents.filter(t => t.deduplicationFactor === 0)
+              const uniqueTorrents = selectedTorrents.filter(t => t.deduplicationFactor > 0)
+
+              // Age analysis
+              const avgAgeAll = selectedTorrents.reduce((sum, t) => sum + t.age, 0) / selectedTorrents.length
+              const avgAgeDuplicates = duplicates.length > 0 ? duplicates.reduce((sum, t) => sum + t.age, 0) / duplicates.length : 0
+              const avgAgeUnique = uniqueTorrents.length > 0 ? uniqueTorrents.reduce((sum, t) => sum + t.age, 0) / uniqueTorrents.length : 0
+
+              // State analysis
+              const stateBreakdown = selectedTorrents.reduce((acc, t) => {
+                acc[t.state] = (acc[t.state] || 0) + 1
+                return acc
+              }, {} as Record<string, number>)
+
+              // Category analysis
+              const categoryBreakdown = selectedTorrents.reduce((acc, t) => {
+                acc[t.category] = (acc[t.category] || 0) + 1
+                return acc
+              }, {} as Record<string, number>)
+
+              // Tracker analysis
+              const trackerBreakdown = selectedTorrents.reduce((acc, t) => {
+                acc[t.tracker] = (acc[t.tracker] || 0) + 1
+                return acc
+              }, {} as Record<string, number>)
+
+              // Size analysis
+              const avgSizeAll = totalSize / selectedTorrents.length
+              const totalDuplicateSize = duplicates.reduce((sum, t) => sum + t.size, 0)
+              const avgDuplicateSize = duplicates.length > 0 ? totalDuplicateSize / duplicates.length : 0
+
+              // Ratio analysis
+              const totalRatioBefore = selectedTorrents.reduce((sum, t) => sum + t.ratio, 0) / selectedTorrents.length
+              const totalRatioAfter = uniqueTorrents.length > 0
+                ? uniqueTorrents.reduce((sum, t) => sum + t.ratio, 0) / uniqueTorrents.length
+                : 0
+              const ratioImpact = totalRatioBefore - totalRatioAfter
+
+              // Seeds analysis
+              const avgSeedsAll = selectedTorrents.reduce((sum, t) => sum + t.seeds, 0) / selectedTorrents.length
+              const avgSeedsDuplicates = duplicates.length > 0 ? duplicates.reduce((sum, t) => sum + t.seeds, 0) / duplicates.length : 0
+              const avgSeedsUnique = uniqueTorrents.length > 0 ? uniqueTorrents.reduce((sum, t) => sum + t.seeds, 0) / uniqueTorrents.length : 0
+
+              return (
+                <>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-3 bg-muted/50 rounded-lg">
+                      <div className="text-2xl font-bold">{selectedTorrents.length}</div>
+                      <div className="text-sm text-muted-foreground">Total Selected</div>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg">
+                      <div className="text-2xl font-bold text-red-600">{duplicates.length}</div>
+                      <div className="text-sm text-muted-foreground">Duplicates</div>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg">
+                      <div className="text-2xl font-bold text-green-600">{uniqueTorrents.length}</div>
+                      <div className="text-sm text-muted-foreground">Unique</div>
+                    </div>
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <div className="text-2xl font-bold text-blue-600">{formatBytes(totalDuplicateSize)}</div>
+                      <div className="text-sm text-muted-foreground">Space to Free</div>
+                    </div>
+                  </div>
+
+                  {/* Key Metrics */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="font-semibold">Storage Impact</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Total size:</span>
+                          <span className="font-medium">{formatBytes(totalSize)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Duplicate size:</span>
+                          <span className="font-medium text-red-600">{formatBytes(totalDuplicateSize)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Space saved:</span>
+                          <span className="font-medium text-green-600">{formatBytes(totalDuplicateSize)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Avg duplicate size:</span>
+                          <span className="font-medium">{formatBytes(avgDuplicateSize)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="font-semibold">Ratio Impact</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Current avg ratio:</span>
+                          <span className="font-medium">{totalRatioBefore.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>After removal:</span>
+                          <span className="font-medium">{totalRatioAfter.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Ratio change:</span>
+                          <span className={`font-medium ${ratioImpact > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {ratioImpact > 0 ? '-' : '+'}{Math.abs(ratioImpact).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Age Analysis */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">Age Analysis</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="p-3 bg-muted/30 rounded">
+                        <div className="font-medium">{avgAgeAll.toFixed(1)}d</div>
+                        <div className="text-muted-foreground">Avg age (all)</div>
+                      </div>
+                      <div className="p-3 bg-red-50 rounded">
+                        <div className="font-medium text-red-600">{avgAgeDuplicates.toFixed(1)}d</div>
+                        <div className="text-muted-foreground">Avg age (duplicates)</div>
+                      </div>
+                      <div className="p-3 bg-green-50 rounded">
+                        <div className="font-medium text-green-600">{avgAgeUnique.toFixed(1)}d</div>
+                        <div className="text-muted-foreground">Avg age (unique)</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seeding Status */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">Seeding Status</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="p-3 bg-muted/30 rounded">
+                        <div className="font-medium">{avgSeedsAll.toFixed(1)}</div>
+                        <div className="text-muted-foreground">Avg seeds (all)</div>
+                      </div>
+                      <div className="p-3 bg-red-50 rounded">
+                        <div className="font-medium text-red-600">{avgSeedsDuplicates.toFixed(1)}</div>
+                        <div className="text-muted-foreground">Avg seeds (duplicates)</div>
+                      </div>
+                      <div className="p-3 bg-green-50 rounded">
+                        <div className="font-medium text-green-600">{avgSeedsUnique.toFixed(1)}</div>
+                        <div className="text-muted-foreground">Avg seeds (unique)</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Breakdowns */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="font-semibold">State Breakdown</h4>
+                      <div className="space-y-1 text-sm">
+                        {Object.entries(stateBreakdown).map(([state, count]) => (
+                          <div key={state} className="flex justify-between">
+                            <span>{state}:</span>
+                            <span className="font-medium">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="font-semibold">Category Breakdown</h4>
+                      <div className="space-y-1 text-sm">
+                        {Object.entries(categoryBreakdown).map(([category, count]) => (
+                          <div key={category} className="flex justify-between">
+                            <span>{category || 'No Category'}:</span>
+                            <span className="font-medium">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tracker Impact */}
+                  <div className="space-y-4">
+                    <h4 className="font-semibold">Tracker Impact</h4>
+                    <div className="space-y-1 text-sm">
+                      {Object.entries(trackerBreakdown).map(([tracker, count]) => (
+                        <div key={tracker} className="flex justify-between">
+                          <span>{tracker}:</span>
+                          <span className="font-medium">{count} torrent{count !== 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recommendations */}
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <h4 className="font-semibold text-amber-800 mb-2">Recommendations</h4>
+                    <ul className="text-sm text-amber-700 space-y-1">
+                      {ratioImpact > 0.5 && (
+                        <li>• High ratio impact detected - consider keeping some duplicates for ratio health</li>
+                      )}
+                      {avgAgeDuplicates > avgAgeUnique + 30 && (
+                        <li>• Duplicates are significantly older - good candidates for removal</li>
+                      )}
+                      {avgSeedsDuplicates < 2 && (
+                        <li>• Duplicates have low seed counts - safe to remove</li>
+                      )}
+                      {totalDuplicateSize > 1024 * 1024 * 1024 * 10 && (
+                        <li>• Large storage savings available - consider removal if space is critical</li>
+                      )}
+                      <li>• Review tracker distribution - removing duplicates may affect multiple trackers</li>
+                    </ul>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
+              Close
+            </Button>
+            <Button onClick={() => {
+              // TODO: Implement actual duplicate removal action
+              setShowPreviewDialog(false)
+              toast.success("Duplicate removal action would be performed here")
+            }}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Proceed with Removal
             </Button>
           </DialogFooter>
         </DialogContent>
