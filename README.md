@@ -370,7 +370,7 @@ location /qui/ {
 ### Quick Start for Developers
 
 ```bash
-# Requirements: Go 1.24+ and Node.js 22+
+# Requirements: Go 1.25+ and Node.js 22+
 
 # Run both frontend and backend in dev mode
 make dev
