@@ -3,70 +3,92 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { useState, useCallback } from "react"
+import { EconomyTable } from "@/components/economy/EconomyTable"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { EconomyDashboard } from "@/components/dashboard/EconomyDashboard"
+import { useInstances } from "@/hooks/useInstances"
+import { formatBytes } from "@/lib/utils"
+import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
-import { Loader2, TrendingUp, AlertCircle } from "lucide-react"
+import { Loader2, TrendingDown, TrendingUp, HardDrive, Package } from "lucide-react"
+import type { FilterOptions } from "@/types"
 
 export function Economy() {
+  const { instances, isLoading: instancesLoading } = useInstances()
   const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null)
+  const [filters, setFilters] = useState<FilterOptions>({
+    status: [],
+    categories: [],
+    tags: [],
+    trackers: [],
+  })
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25) // Increased default page size for better performance
+  const [pageSize, setPageSize] = useState(25)
   const [sortField, setSortField] = useState<string>("economyScore")
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc")
 
-  // Get all instances
-  const { data: instances, isLoading: instancesLoading } = useQuery({
-    queryKey: ["instances"],
-    queryFn: () => api.getInstances(),
+  // Set default instance when instances load
+  useState(() => {
+    if (instances && instances.length > 0 && !selectedInstanceId) {
+      setSelectedInstanceId(instances[0].id)
+    }
   })
 
-  // Get economy analysis for selected instance with pagination, sorting, and filtering
-  const { data: economyData, isLoading: economyLoading, error } = useQuery({
-    queryKey: ["economy-analysis", selectedInstanceId, currentPage, pageSize, sortField, sortOrder],
+  // Fetch economy data
+  const { data: economyData, isLoading: economyLoading, refetch } = useQuery({
+    queryKey: ["economy", selectedInstanceId, currentPage, pageSize, sortField, sortOrder, filters],
     queryFn: () => {
       if (!selectedInstanceId) return null
-      
-      // Send sorting parameters to ensure proper backend sorting
-      return api.getEconomyAnalysis(selectedInstanceId, currentPage, pageSize, sortField, sortOrder)
+      return api.getEconomyAnalysis(
+        selectedInstanceId,
+        currentPage,
+        pageSize,
+        sortField,
+        sortOrder,
+        filters
+      )
     },
-    enabled: selectedInstanceId !== null,
+    enabled: !!selectedInstanceId,
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
-  // Handle page changes
-  const handlePageChange = (page: number, newPageSize: number) => {
+  // Fetch economy stats
+  const { data: statsData } = useQuery({
+    queryKey: ["economy-stats", selectedInstanceId],
+    queryFn: () => {
+      if (!selectedInstanceId) return null
+      return api.getEconomyStats(selectedInstanceId)
+    },
+    enabled: !!selectedInstanceId,
+    refetchInterval: 60000, // Refresh every minute
+  })
+
+  const handleInstanceChange = useCallback((value: string) => {
+    setSelectedInstanceId(parseInt(value))
+    setCurrentPage(1) // Reset to first page when changing instance
+  }, [])
+
+  const handlePageChange = useCallback((page: number, newPageSize?: number) => {
     setCurrentPage(page)
-    setPageSize(newPageSize)
-  }
+    if (newPageSize && newPageSize !== pageSize) {
+      setPageSize(newPageSize)
+    }
+  }, [pageSize])
 
-  // Handle sorting changes
-  const handleSortingChange = (field: string, desc: boolean) => {
+  const handleSortChange = useCallback((field: string, order: "asc" | "desc") => {
     setSortField(field)
-    setSortOrder(desc ? 'desc' : 'asc')
-    setCurrentPage(1) // Reset to first page when sorting changes
-  }
+    setSortOrder(order)
+  }, [])
 
-  // Reset pagination when instance changes
-  const handleInstanceChange = (instanceId: number) => {
-    setSelectedInstanceId(instanceId)
-    setCurrentPage(1) // Reset to first page
-  }
-
-  // Auto-select first connected instance
-  const connectedInstances = instances?.filter((i: any) => i.connected) || []
-  if (selectedInstanceId === null && connectedInstances.length > 0) {
-    handleInstanceChange(connectedInstances[0].id)
-  }
+  const handleFilterChange = useCallback((newFilters: FilterOptions) => {
+    setFilters(newFilters)
+    setCurrentPage(1) // Reset to first page when filtering
+  }, [])
 
   if (instancesLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
@@ -74,140 +96,144 @@ export function Economy() {
 
   if (!instances || instances.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold mb-2">No Instances Found</h2>
-        <p className="text-muted-foreground mb-4">
-          You need to add and connect to a qBittorrent instance to view economy data.
-        </p>
-        <Button asChild>
-          <a href="/instances">Manage Instances</a>
-        </Button>
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-4">Economy Analysis</h1>
+        <p className="text-muted-foreground">No instances configured. Please add an instance first.</p>
       </div>
     )
   }
 
-  if (connectedInstances.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center">
-        <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold mb-2">No Connected Instances</h2>
-        <p className="text-muted-foreground mb-4">
-          Connect to a qBittorrent instance to analyze your torrent economy.
-        </p>
-        <Button asChild>
-          <a href="/instances">Connect Instance</a>
-        </Button>
-      </div>
-    )
+  // Automatically select first instance if none selected
+  if (!selectedInstanceId && instances.length > 0) {
+    setSelectedInstanceId(instances[0].id)
   }
+
+  const stats = statsData || economyData?.stats
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <TrendingUp className="h-8 w-8" />
-            Torrent Economy
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Analyze your torrent storage efficiency and identify high-value content
-          </p>
-        </div>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex-shrink-0 border-b bg-background">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-bold">Economy Analysis</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Analyze torrent value and optimize storage usage
+              </p>
+            </div>
+            <Select value={selectedInstanceId?.toString()} onValueChange={handleInstanceChange}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Select instance" />
+              </SelectTrigger>
+              <SelectContent>
+                {instances.map((instance) => (
+                  <SelectItem key={instance.id} value={instance.id.toString()}>
+                    {instance.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="flex items-center gap-4">
-          <Select
-            value={pageSize.toString()}
-            onValueChange={(value) => {
-              const newPageSize = parseInt(value)
-              setPageSize(newPageSize)
-              setCurrentPage(1) // Reset to first page when changing page size
-            }}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Page size" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10 per page</SelectItem>
-              <SelectItem value="25">25 per page</SelectItem>
-              <SelectItem value="50">50 per page</SelectItem>
-              <SelectItem value="100">100 per page</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Stats Cards */}
+          {stats && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs">Total Storage</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <HardDrive className="h-4 w-4" />
+                    {formatBytes(stats.totalStorage)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.totalTorrents} torrents
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    Current disk usage across all torrents
+                  </p>
+                </CardContent>
+              </Card>
 
-          <Select
-            value={selectedInstanceId?.toString() || ""}
-            onValueChange={(value) => handleInstanceChange(parseInt(value))}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Select instance" />
-            </SelectTrigger>
-            <SelectContent>
-              {connectedInstances.map((instance) => (
-                <SelectItem key={instance.id} value={instance.id.toString()}>
-                  <div className="flex items-center gap-2">
-                    <span>{instance.name}</span>
-                    <Badge variant="outline" className="text-xs">
-                      Connected
-                    </Badge>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs">Storage Savings</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingDown className="h-4 w-4 text-green-500" />
+                    {formatBytes(stats.storageSavings)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    From {stats.totalTorrents - stats.rareContentCount} duplicates
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    Space saved by removing duplicate files
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs">Average Score</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4" />
+                    {stats.averageEconomyScore.toFixed(1)}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    Retention value (0-100)
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    Higher scores = keep longer
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs">Rare Content</CardDescription>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Package className="h-4 w-4 text-orange-500" />
+                    {stats.rareContentCount}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    Torrents with &lt;5 seeds
+                  </p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
+                    Critical to preserve for availability
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
 
-      {selectedInstanceId && (
-        <>
-          {economyLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                <p className="text-muted-foreground">Analyzing torrent economy...</p>
-              </div>
-            </div>
-          ) : error ? (
-            <Card>
-              <CardContent className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Failed to Load Economy Data</h3>
-                  <p className="text-muted-foreground">
-                    {error instanceof Error ? error.message : "An unknown error occurred"}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : economyData ? (
-            <EconomyDashboard 
-              analysis={economyData} 
-              instanceId={selectedInstanceId} 
-              onPageChange={handlePageChange}
-              onSortingChange={(sorting) => {
-                if (sorting.length > 0) {
-                  const sort = sorting[0]
-                  handleSortingChange(sort.id, sort.desc)
-                }
-              }}
-            />
-          ) : null}
-        </>
-      )}
-
-      {!selectedInstanceId && (
-        <Card>
-          <CardContent className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Select an Instance</h3>
-              <p className="text-muted-foreground">
-                Choose a qBittorrent instance to analyze its torrent economy
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Table */}
+      <div className="flex-1 overflow-hidden">
+        {selectedInstanceId && (
+          <EconomyTable
+            instanceId={selectedInstanceId}
+            data={economyData}
+            isLoading={economyLoading}
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onSortChange={handleSortChange}
+            onRefresh={() => refetch()}
+          />
+        )}
+      </div>
     </div>
   )
 }

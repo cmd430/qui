@@ -25,7 +25,7 @@ export function Pagination({
   totalItems,
   onPageChange,
   showPageSizeSelector = true,
-  showPageJump = true
+  showPageJump = true,
 }: PaginationProps) {
   const [jumpToPage, setJumpToPage] = useState("")
 

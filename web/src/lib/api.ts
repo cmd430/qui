@@ -452,13 +452,13 @@ class ApiClient {
   }
 
   // Economy endpoints
-  async getEconomyAnalysis(instanceId: number, page?: number, pageSize?: number, sort?: string, order?: 'asc' | 'desc', filters?: FilterOptions): Promise<EconomyAnalysis> {
+  async getEconomyAnalysis(instanceId: number, page?: number, pageSize?: number, sort?: string, order?: "asc" | "desc", filters?: FilterOptions): Promise<EconomyAnalysis> {
     const searchParams = new URLSearchParams()
-    
+
     // Always include page parameter, defaulting to configured value if not provided
     const pageValue = page || API_DEFAULTS.ECONOMY_ANALYSIS.PAGE
     searchParams.set("page", pageValue.toString())
-    
+
     // Always include pageSize parameter, defaulting to configured value if not provided
     const pageSizeValue = pageSize || API_DEFAULTS.ECONOMY_ANALYSIS.PAGE_SIZE
     searchParams.set("pageSize", pageSizeValue.toString())
