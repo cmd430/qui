@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle, Trash2 } from "lucide-react"
 import type { EconomyAnalysis, EconomyScore } from "@/types"
-import { useState, Fragment } from "react"
+import { useState } from "react"
 import { api } from "@/lib/api"
 
 interface EconomyDashboardProps {
@@ -655,7 +655,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
             </TableHeader>
             <TableBody>
               {torrentGroups.map((group, groupIndex) => (
-                <React.Fragment key={`group-${groupIndex}`}>
+                <>
                   {group.map((torrent) => (
                     <TableRow
                       key={torrent.hash}
@@ -788,7 +788,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
                       </TableCell>
                     </TableRow>
                   )}
-                </React.Fragment>
+                </>
               ))}
             </TableBody>
           </Table>
