@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
 import type { EconomyAnalysis, TorrentGroup } from "@/types"
-import { useState } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { TorrentGroupCard } from "./TorrentGroupCard"
 import { TorrentActions } from "../torrents/TorrentActions"
 
@@ -32,11 +32,24 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
   const { torrents: currentTorrents, groups, torrentGroups: enhancedGroups, groupingEnabled, pagination } = reviewTorrents
   const { page, pageSize, totalItems, totalPages, hasNextPage, hasPrevPage } = pagination
 
-  // Use enhanced groups if available and enabled, otherwise fall back to flat list
-  const shouldUseGrouped = viewMode === "grouped" && groupingEnabled && enhancedGroups && enhancedGroups.length > 0
-  const displayGroups = shouldUseGrouped ? enhancedGroups : (groups && groups.length > 0 ? groups : [currentTorrents])
+  // Memoize expensive calculations
+  const shouldUseGrouped = useMemo(() => 
+    viewMode === "grouped" && groupingEnabled && enhancedGroups && enhancedGroups.length > 0,
+    [viewMode, groupingEnabled, enhancedGroups]
+  )
 
-  const handleSelectTorrent = (hash: string, checked: boolean) => {
+  const displayGroups = useMemo(() => 
+    shouldUseGrouped ? enhancedGroups : (groups && groups.length > 0 ? groups : [currentTorrents]),
+    [shouldUseGrouped, enhancedGroups, groups, currentTorrents]
+  )
+
+  // Memoize all selected check
+  const allSelected = useMemo(() => 
+    currentTorrents.length > 0 && currentTorrents.every(torrent => selectedTorrents.has(torrent.hash)),
+    [currentTorrents, selectedTorrents]
+  )
+
+  const handleSelectTorrent = useCallback((hash: string, checked: boolean) => {
     setSelectedTorrents((prev: Set<string>) => {
       const newSet = new Set(prev)
       if (checked) {
@@ -46,9 +59,9 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
       }
       return newSet
     })
-  }
+  }, [])
 
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = useCallback((checked: boolean) => {
     if (checked) {
       const allHashes = currentTorrents.map(torrent => torrent.hash)
       setSelectedTorrents((prev: Set<string>) => new Set([...prev, ...allHashes]))
@@ -60,9 +73,9 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
         return newSet
       })
     }
-  }
+  }, [currentTorrents])
 
-  const handleSelectGroup = (hashes: string[], checked: boolean) => {
+  const handleSelectGroup = useCallback((hashes: string[], checked: boolean) => {
     if (checked) {
       setSelectedTorrents((prev: Set<string>) => new Set([...prev, ...hashes]))
     } else {
@@ -72,7 +85,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
         return newSet
       })
     }
-  }
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -478,68 +491,67 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                 </div>
               )}
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={
-                          currentTorrents.length > 0 &&
-                          currentTorrents.every(torrent => selectedTorrents.has(torrent.hash))
-                        }
-                        onCheckedChange={handleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Seeds</TableHead>
-                    <TableHead>Age (days)</TableHead>
-                    <TableHead>Economy Score</TableHead>
-                    <TableHead>Ratio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentTorrents.map((torrent) => (
-                    <TableRow key={torrent.hash}>
-                      <TableCell>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
                         <Checkbox
-                          checked={selectedTorrents.has(torrent.hash)}
-                          onCheckedChange={(checked: boolean) => handleSelectTorrent(torrent.hash, checked)}
+                          checked={allSelected}
+                          onCheckedChange={handleSelectAll}
                         />
-                      </TableCell>
-                      <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
-                        <div className="flex items-center gap-2">
-                          {torrent.name}
-                          {torrent.deduplicationFactor === 0 && (
-                            <Badge variant="outline" className="text-xs">
-                              Duplicate
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatBytes(torrent.size)}</TableCell>
-                      <TableCell>
-                        <Badge variant={torrent.seeds < 5 ? "destructive" : torrent.seeds < 10 ? "secondary" : "default"}>
-                          {torrent.seeds}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{torrent.age}</TableCell>
-                      <TableCell className="font-semibold text-red-600">
-                        {torrent.economyScore === 0 ? (
-                          <span className="text-gray-500">0.00 (Duplicate)</span>
-                        ) : (
-                          torrent.economyScore.toFixed(2)
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span className={torrent.ratio < 0.5 ? "text-red-500" : torrent.ratio < 1.0 ? "text-yellow-500" : "text-green-500"}>
-                          {torrent.ratio.toFixed(2)}
-                        </span>
-                      </TableCell>
+                      </TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Size</TableHead>
+                      <TableHead>Seeds</TableHead>
+                      <TableHead>Age (days)</TableHead>
+                      <TableHead>Economy Score</TableHead>
+                      <TableHead>Ratio</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {currentTorrents.map((torrent) => (
+                      <TableRow key={torrent.hash}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedTorrents.has(torrent.hash)}
+                            onCheckedChange={(checked: boolean) => handleSelectTorrent(torrent.hash, checked)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
+                          <div className="flex items-center gap-2">
+                            {torrent.name}
+                            {torrent.deduplicationFactor === 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                Duplicate
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatBytes(torrent.size)}</TableCell>
+                        <TableCell>
+                          <Badge variant={torrent.seeds < 5 ? "destructive" : torrent.seeds < 10 ? "secondary" : "default"}>
+                            {torrent.seeds}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{torrent.age}</TableCell>
+                        <TableCell className="font-semibold text-red-600">
+                          {torrent.economyScore === 0 ? (
+                            <span className="text-gray-500">0.00 (Duplicate)</span>
+                          ) : (
+                            torrent.economyScore.toFixed(2)
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className={torrent.ratio < 0.5 ? "text-red-500" : torrent.ratio < 1.0 ? "text-yellow-500" : "text-green-500"}>
+                            {torrent.ratio.toFixed(2)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
               {/* Pagination Controls */}
               {totalPages > 1 && (
@@ -568,6 +580,13 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                       Next
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Performance note for large datasets */}
+              {totalItems > 100 && (
+                <div className="mt-2 text-xs text-muted-foreground text-center">
+                  Large dataset detected. Consider using filters or adjusting page size for better performance.
                 </div>
               )}
             </>
