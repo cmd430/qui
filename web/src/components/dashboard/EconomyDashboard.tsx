@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
-import type { EconomyAnalysis, TorrentGroup } from "@/types"
+import type { EconomyAnalysis } from "@/types"
 import { useState, useCallback, useMemo } from "react"
 import { TorrentGroupCard } from "./TorrentGroupCard"
 import { TorrentActions } from "../torrents/TorrentActions"
@@ -26,22 +26,13 @@ interface EconomyDashboardProps {
 export function EconomyDashboard({ analysis, instanceId, onPageChange }: EconomyDashboardProps) {
   const { stats, topValuable, optimizations, storageOptimization, reviewTorrents } = analysis
   const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<"grouped" | "list">("grouped")
 
-  // Use paginated data from backend
-  const { torrents: currentTorrents, groups, torrentGroups: enhancedGroups, groupingEnabled, pagination } = reviewTorrents
+  // Use paginated data from backend - backend handles grouping logic
+  const { torrents: currentTorrents, torrentGroups: enhancedGroups, pagination } = reviewTorrents
   const { page, pageSize, totalItems, totalPages, hasNextPage, hasPrevPage } = pagination
 
-  // Memoize expensive calculations
-  const shouldUseGrouped = useMemo(() => 
-    viewMode === "grouped" && groupingEnabled && enhancedGroups && enhancedGroups.length > 0,
-    [viewMode, groupingEnabled, enhancedGroups]
-  )
-
-  const displayGroups = useMemo(() => 
-    shouldUseGrouped ? enhancedGroups : (groups && groups.length > 0 ? groups : [currentTorrents]),
-    [shouldUseGrouped, enhancedGroups, groups, currentTorrents]
-  )
+  // Backend determines if grouping should be used
+  const shouldUseGroupedView = enhancedGroups && enhancedGroups.length > 0
 
   // Memoize all selected check
   const allSelected = useMemo(() => 
@@ -421,44 +412,25 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                 Torrents with the lowest economy scores that may need attention or removal
               </CardDescription>
             </div>
-            {reviewTorrents.groupingEnabled && reviewTorrents.torrentGroups && reviewTorrents.torrentGroups.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={viewMode === "list" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                >
-                  List View
-                </Button>
-                <Button
-                  variant={viewMode === "grouped" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setViewMode("grouped")}
-                >
-                  Group View
-                </Button>
-              </div>
-            )}
           </div>
         </CardHeader>
         <CardContent>
-          {shouldUseGrouped ? (
-            // Grouped view using TorrentGroupCard components
+          {shouldUseGroupedView ? (
+            // Backend has provided grouped data - render TorrentGroupCard components
             <div className="space-y-4">
-              {displayGroups
-                .filter((group): group is TorrentGroup => 'torrents' in group && 'groupType' in group)
-                .map((group) => (
-                  <TorrentGroupCard
-                    group={group}
-                    selectedTorrents={selectedTorrents}
-                    instanceId={instanceId}
-                    onSelectTorrent={handleSelectTorrent}
-                    onSelectGroup={handleSelectGroup}
-                  />
-                ))}
+              {enhancedGroups.map((group) => (
+                <TorrentGroupCard
+                  key={group.id}
+                  group={group}
+                  selectedTorrents={selectedTorrents}
+                  instanceId={instanceId}
+                  onSelectTorrent={handleSelectTorrent}
+                  onSelectGroup={handleSelectGroup}
+                />
+              ))}
             </div>
           ) : (
-            // List view using table
+            // Backend has provided individual torrents - render table
             <>
               {/* Torrent Actions */}
               {selectedTorrents.size > 0 && (
