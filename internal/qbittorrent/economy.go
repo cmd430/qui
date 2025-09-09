@@ -252,8 +252,11 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	// Find duplicates
 	duplicates := es.findDuplicates(ctx, instanceID, torrents)
 
+	// Pre-calculate duplicate hash set for performance optimization
+	duplicateHashSet := createDuplicateHashSet(duplicates)
+
 	// Apply deduplication factors and update scores
-	scores = es.applyDeduplicationFactors(scores, duplicates)
+	scores = es.applyDeduplicationFactors(scores, duplicates, duplicateHashSet)
 
 	// Sort by economy score for top valuable (highest first)
 	sortedScores := make([]EconomyScore, len(scores))
@@ -263,13 +266,13 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	})
 
 	// Calculate statistics
-	stats := es.calculateStats(scores, duplicates)
+	stats := es.calculateStats(scores, duplicates, duplicateHashSet)
 
 	// Calculate optimization opportunities
-	optimizations := es.calculateOptimizationOpportunities(scores, duplicates)
+	optimizations := es.calculateOptimizationOpportunities(scores, duplicates, duplicateHashSet)
 
 	// Calculate storage optimization data
-	storageOptimization := es.calculateStorageOptimization(scores, duplicates)
+	storageOptimization := es.calculateStorageOptimization(scores, duplicates, duplicateHashSet)
 
 	// Get top valuable torrents
 	topValuable := sortedScores
@@ -283,7 +286,7 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 
 	// Create torrent groups
 	torrentGroups := es.createTorrentGroups(reviewTorrents)
-	enhancedGroups := es.createEnhancedTorrentGroups(reviewTorrents, duplicates)
+	enhancedGroups := es.createEnhancedTorrentGroups(reviewTorrents, duplicates, duplicateHashSet)
 
 	// Create paginated review torrents
 	paginatedReviewTorrents := es.CreatePaginatedReviewTorrents(reviewTorrents, torrentGroups, enhancedGroups, page, pageSize)
@@ -613,14 +616,14 @@ func (es *EconomyService) normalizeContentName(name string) string {
 }
 
 // applyDeduplicationFactors updates economy scores based on duplicates
-func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, duplicates map[string][]string) []EconomyScore {
+func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, duplicates map[string][]string, duplicateHashSet map[string]bool) []EconomyScore {
 	if len(scores) == 0 {
 		return scores
 	}
 
 	// Pre-calculate shared data structures
 	scoreMap := createScoreMap(scores)
-	duplicateHashSet := createDuplicateHashSet(duplicates)
+	// duplicateHashSet is now passed as parameter instead of computed here
 
 	// Apply seed factors and duplicate bonuses
 	es.applySeedFactors(scores, duplicateHashSet)
@@ -705,7 +708,7 @@ func (es *EconomyService) setUniqueTorrentReviewPriorities(scores []EconomyScore
 }
 
 // calculateStats calculates aggregated economy statistics
-func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[string][]string) EconomyStats {
+func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[string][]string, duplicateHashSet map[string]bool) EconomyStats {
 	if len(scores) == 0 {
 		return EconomyStats{}
 	}
@@ -720,7 +723,7 @@ func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[s
 	var wellSeededOldCount int
 
 	// Calculate deduplicated storage using the same logic as storage optimization
-	deduplicatedStorage := es.calculateDeduplicatedStorage(scores, duplicates, scoreMap)
+	deduplicatedStorage := es.calculateDeduplicatedStorage(scores, duplicates, scoreMap, duplicateHashSet)
 
 	// Calculate stats in a single pass
 	for _, score := range scores {
@@ -755,12 +758,12 @@ func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[s
 }
 
 // calculateDeduplicatedStorage calculates the storage used if we keep only the best copy of each duplicate group
-func (es *EconomyService) calculateDeduplicatedStorage(scores []EconomyScore, duplicates map[string][]string, scoreMap map[string]*EconomyScore) int64 {
+func (es *EconomyService) calculateDeduplicatedStorage(scores []EconomyScore, duplicates map[string][]string, scoreMap map[string]*EconomyScore, duplicateHashSet map[string]bool) int64 {
 	countedHashes := make(map[string]bool)
 
 	// Add all non-duplicates
 	for _, score := range scores {
-		if _, isDuplicate := createDuplicateHashSet(duplicates)[score.Hash]; !isDuplicate {
+		if !duplicateHashSet[score.Hash] {
 			countedHashes[score.Hash] = true
 		}
 	}
@@ -784,12 +787,12 @@ func (es *EconomyService) calculateDeduplicatedStorage(scores []EconomyScore, du
 }
 
 // calculateOptimizationOpportunities identifies specific optimization opportunities
-func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomyScore, duplicates map[string][]string) []OptimizationOpportunity {
+func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomyScore, duplicates map[string][]string, duplicateHashSet map[string]bool) []OptimizationOpportunity {
 	var opportunities []OptimizationOpportunity
 
 	// Pre-calculate shared data structures
 	scoreMap := createScoreMap(scores)
-	duplicateHashSet := createDuplicateHashSet(duplicates)
+	// duplicateHashSet is now passed as parameter instead of computed here
 
 	// 1. Duplicate removal opportunities
 	if dupOp := es.createDuplicateRemovalOpportunity(scores, duplicates, scoreMap); dupOp != nil {
@@ -1018,10 +1021,10 @@ func (es *EconomyService) createHighValueOpportunity(scores []EconomyScore, dupl
 }
 
 // calculateStorageOptimization calculates comprehensive storage optimization data
-func (es *EconomyService) calculateStorageOptimization(scores []EconomyScore, duplicates map[string][]string) StorageOptimization {
+func (es *EconomyService) calculateStorageOptimization(scores []EconomyScore, duplicates map[string][]string, duplicateHashSet map[string]bool) StorageOptimization {
 	// Pre-calculate shared data structures
 	scoreMap := createScoreMap(scores)
-	duplicateHashSet := createDuplicateHashSet(duplicates)
+	// duplicateHashSet is now passed as parameter instead of computed here
 
 	var deduplicationSavings int64
 	var oldContentCleanupSavings int64
@@ -1272,14 +1275,14 @@ func (es *EconomyService) createTorrentGroups(reviewTorrents []EconomyScore) [][
 }
 
 // createEnhancedTorrentGroups creates enhanced torrent groups with metadata for the frontend
-func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomyScore, duplicates map[string][]string) []TorrentGroup {
+func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomyScore, duplicates map[string][]string, duplicateHashSet map[string]bool) []TorrentGroup {
 	var enhancedGroups []TorrentGroup
 	processed := make(map[string]bool)
 	groupID := 1
 
 	// Pre-calculate shared data structures
 	reviewTorrentMap := createScoreMap(reviewTorrents)
-	duplicateHashSet := createDuplicateHashSet(duplicates)
+	// duplicateHashSet is now passed as parameter instead of computed here
 
 	for _, torrent := range reviewTorrents {
 		if processed[torrent.Hash] {
