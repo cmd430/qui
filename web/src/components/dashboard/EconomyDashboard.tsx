@@ -202,9 +202,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const [loadedRows, setLoadedRows] = useState(100)
   const [isLoadingMoreRows, setIsLoadingMoreRows] = useState(false)
 
-  // Safe loaded rows to prevent virtualizer issues
-  const safeLoadedRows = useMemo(() => Math.min(loadedRows, filteredTorrents.length), [loadedRows, filteredTorrents.length])
-
   // Query client for invalidating queries
   const queryClient = useQueryClient()
 
@@ -299,6 +296,9 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
     return filtered
   }, [sortedTorrents, filterScoreMin, filterScoreMax, filterDeduplicationMin, filterDeduplicationMax])
+
+  // Safe loaded rows to prevent virtualizer issues
+  const safeLoadedRows = useMemo(() => Math.min(loadedRows, filteredTorrents.length), [loadedRows, filteredTorrents.length])
 
   // Custom selection handlers for "select all" functionality
   const handleSelectAll = useCallback(() => {
@@ -1692,7 +1692,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
               ).filter(Boolean) as EconomyScore[]
 
               const totalSize = selectedTorrents.reduce((sum, t) => sum + t.size, 0)
-              const totalStorageValue = selectedTorrents.reduce((sum, t) => sum + t.storageValue, 0)
               const duplicates = selectedTorrents.filter(t => t.deduplicationFactor === 0)
               const uniqueTorrents = selectedTorrents.filter(t => t.deduplicationFactor > 0)
 
@@ -1720,7 +1719,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
               }, {} as Record<string, number>)
 
               // Size analysis
-              const avgSizeAll = totalSize / selectedTorrents.length
               const totalDuplicateSize = duplicates.reduce((sum, t) => sum + t.size, 0)
               const avgDuplicateSize = duplicates.length > 0 ? totalDuplicateSize / duplicates.length : 0
 
