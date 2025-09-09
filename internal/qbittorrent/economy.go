@@ -228,6 +228,11 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 
 // AnalyzeEconomyWithPagination performs a complete economy analysis for an instance with pagination
 func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, instanceID int, page, pageSize int) (*EconomyAnalysis, error) {
+	return es.AnalyzeEconomyWithPaginationAndSorting(ctx, instanceID, page, pageSize, "", false, FilterOptions{})
+}
+
+// AnalyzeEconomyWithPaginationAndSorting performs a complete economy analysis for an instance with pagination, sorting, and filtering
+func (es *EconomyService) AnalyzeEconomyWithPaginationAndSorting(ctx context.Context, instanceID int, page, pageSize int, sortField string, sortDesc bool, filters FilterOptions) (*EconomyAnalysis, error) {
 	// Get all torrents
 	torrents, err := es.getAllTorrents(ctx, instanceID)
 	if err != nil {
@@ -254,15 +259,11 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	// Pre-calculate duplicate hash set for performance optimization
 	duplicateHashSet := createDuplicateHashSet(duplicates)
 
-	// Apply deduplication factors and update scores
-	scores = es.applyDeduplicationFactors(scores, duplicates, duplicateHashSet)
+	// Apply filters to scores
+	scores = es.applyFiltersToScores(scores, filters)
 
-	// Sort by economy score for top valuable (highest first)
-	sortedScores := make([]EconomyScore, len(scores))
-	copy(sortedScores, scores)
-	sort.Slice(sortedScores, func(i, j int) bool {
-		return sortedScores[i].EconomyScore > sortedScores[j].EconomyScore
-	})
+	// Sort scores based on sortField and sortDesc
+	sortedScores := es.sortScores(scores, sortField, sortDesc)
 
 	// Calculate statistics
 	stats := es.calculateStats(scores, duplicates, duplicateHashSet)
@@ -273,15 +274,19 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	// Calculate storage optimization data
 	storageOptimization := es.calculateStorageOptimization(scores, duplicates, duplicateHashSet)
 
-	// Get top valuable torrents
+	// Get top valuable torrents (configurable limit)
+	topValuableLimit := 50 // Configurable limit instead of hard coded 20
 	topValuable := sortedScores
-	if len(topValuable) > 20 {
-		topValuable = topValuable[:20]
+	if len(topValuable) > topValuableLimit {
+		topValuable = topValuable[:topValuableLimit]
 	}
 
 	// Calculate review threshold and filter review torrents
 	reviewThreshold := es.calculateReviewThreshold(scores)
 	reviewTorrents := es.buildReviewTorrents(scores, reviewThreshold)
+
+	// Apply sorting to review torrents as well
+	reviewTorrents = es.sortScores(reviewTorrents, sortField, sortDesc)
 
 	// Create torrent groups
 	torrentGroups := es.createTorrentGroups(reviewTorrents)
@@ -1511,4 +1516,119 @@ func (es *EconomyService) createEnhancedGroupsForPage(pageTorrents []EconomyScor
 	}
 
 	return pageEnhancedGroups
+}
+
+// applyFiltersToScores applies the given filters to the economy scores
+func (es *EconomyService) applyFiltersToScores(scores []EconomyScore, filters FilterOptions) []EconomyScore {
+	if len(filters.Status) == 0 && len(filters.Categories) == 0 && len(filters.Tags) == 0 && len(filters.Trackers) == 0 {
+		return scores
+	}
+
+	var filtered []EconomyScore
+	for _, score := range scores {
+		// Filter by status
+		if len(filters.Status) > 0 {
+			statusMatch := false
+			for _, status := range filters.Status {
+				if strings.EqualFold(score.State, status) {
+					statusMatch = true
+					break
+				}
+			}
+			if !statusMatch {
+				continue
+			}
+		}
+
+		// Filter by category
+		if len(filters.Categories) > 0 {
+			categoryMatch := false
+			for _, category := range filters.Categories {
+				if strings.EqualFold(score.Category, category) {
+					categoryMatch = true
+					break
+				}
+			}
+			if !categoryMatch {
+				continue
+			}
+		}
+
+		// Filter by tracker
+		if len(filters.Trackers) > 0 {
+			trackerMatch := false
+			for _, tracker := range filters.Trackers {
+				if strings.Contains(strings.ToLower(score.Tracker), strings.ToLower(tracker)) {
+					trackerMatch = true
+					break
+				}
+			}
+			if !trackerMatch {
+				continue
+			}
+		}
+
+		// Note: Tag filtering would require additional metadata from qBittorrent
+		// For now, we'll skip tag filtering as it's not available in EconomyScore
+
+		filtered = append(filtered, score)
+	}
+
+	return filtered
+}
+
+// sortScores sorts the economy scores based on the given field and direction
+func (es *EconomyService) sortScores(scores []EconomyScore, sortField string, sortDesc bool) []EconomyScore {
+	if len(scores) == 0 {
+		return scores
+	}
+
+	sorted := make([]EconomyScore, len(scores))
+	copy(sorted, scores)
+
+	sort.Slice(sorted, func(i, j int) bool {
+		var less bool
+
+		switch strings.ToLower(sortField) {
+		case "name":
+			less = strings.ToLower(sorted[i].Name) < strings.ToLower(sorted[j].Name)
+		case "size":
+			less = sorted[i].Size < sorted[j].Size
+		case "seeds":
+			less = sorted[i].Seeds < sorted[j].Seeds
+		case "peers":
+			less = sorted[i].Peers < sorted[j].Peers
+		case "ratio":
+			less = sorted[i].Ratio < sorted[j].Ratio
+		case "age":
+			less = sorted[i].Age < sorted[j].Age
+		case "economyscore", "economy_score", "":
+			// Default to economy score
+			less = sorted[i].EconomyScore < sorted[j].EconomyScore
+		case "storagevalue", "storage_value":
+			less = sorted[i].StorageValue < sorted[j].StorageValue
+		case "raritybonus", "rarity_bonus":
+			less = sorted[i].RarityBonus < sorted[j].RarityBonus
+		case "reviewpriority", "review_priority":
+			less = sorted[i].ReviewPriority < sorted[j].ReviewPriority
+		case "lastactivity", "last_activity":
+			less = sorted[i].LastActivity < sorted[j].LastActivity
+		case "tracker":
+			less = strings.ToLower(sorted[i].Tracker) < strings.ToLower(sorted[j].Tracker)
+		case "category":
+			less = strings.ToLower(sorted[i].Category) < strings.ToLower(sorted[j].Category)
+		case "state":
+			less = strings.ToLower(sorted[i].State) < strings.ToLower(sorted[j].State)
+		default:
+			// Default to economy score
+			less = sorted[i].EconomyScore < sorted[j].EconomyScore
+		}
+
+		if sortDesc {
+			return !less
+		}
+		return less
+	})
+
+	return sorted
 }

@@ -1754,12 +1754,17 @@ func (sm *SyncManager) SetTorrentDownloadLimit(ctx context.Context, instanceID i
 
 // GetEconomyAnalysis performs a complete economy analysis for an instance
 func (sm *SyncManager) GetEconomyAnalysis(ctx context.Context, instanceID int) (*EconomyAnalysis, error) {
-	return sm.GetEconomyAnalysisWithPagination(ctx, instanceID, 1, 25)
+	return sm.GetEconomyAnalysisWithPaginationAndSorting(ctx, instanceID, 1, 50, "", false, FilterOptions{})
 }
 
 // GetEconomyAnalysisWithPagination performs a complete economy analysis for an instance with pagination
 func (sm *SyncManager) GetEconomyAnalysisWithPagination(ctx context.Context, instanceID int, page, pageSize int) (*EconomyAnalysis, error) {
-	return sm.economyService.AnalyzeEconomyWithPagination(ctx, instanceID, page, pageSize)
+	return sm.GetEconomyAnalysisWithPaginationAndSorting(ctx, instanceID, page, pageSize, "", false, FilterOptions{})
+}
+
+// GetEconomyAnalysisWithPaginationAndSorting performs a complete economy analysis for an instance with pagination, sorting, and filtering
+func (sm *SyncManager) GetEconomyAnalysisWithPaginationAndSorting(ctx context.Context, instanceID int, page, pageSize int, sortField string, sortDesc bool, filters FilterOptions) (*EconomyAnalysis, error) {
+	return sm.economyService.AnalyzeEconomyWithPaginationAndSorting(ctx, instanceID, page, pageSize, sortField, sortDesc, filters)
 }
 
 // GetEconomyStats gets aggregated economy statistics for an instance

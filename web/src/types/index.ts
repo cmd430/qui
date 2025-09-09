@@ -489,3 +489,10 @@ export interface EconomyAnalysis {
   reviewTorrents: PaginatedReviewTorrents
   reviewThreshold: number
 }
+
+export interface FilterOptions {
+  status: string[]
+  categories: string[]
+  tags: string[]
+  trackers: string[]
+}

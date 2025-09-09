@@ -10,6 +10,7 @@ import type {
   EconomyAnalysis,
   EconomyScore,
   EconomyStats,
+  FilterOptions,
   InstanceFormData,
   InstanceResponse,
   TorrentResponse,
@@ -443,7 +444,7 @@ class ApiClient {
   }
 
   // Economy endpoints
-  async getEconomyAnalysis(instanceId: number, page?: number, pageSize?: number): Promise<EconomyAnalysis> {
+  async getEconomyAnalysis(instanceId: number, page?: number, pageSize?: number, sort?: string, order?: 'asc' | 'desc', filters?: FilterOptions): Promise<EconomyAnalysis> {
     const searchParams = new URLSearchParams()
     
     // Always include page parameter, defaulting to 1 if not provided
@@ -453,6 +454,19 @@ class ApiClient {
     // Always include pageSize parameter, defaulting to 25 if not provided
     const pageSizeValue = pageSize || 25
     searchParams.set("pageSize", pageSizeValue.toString())
+
+    // Include sorting parameters if provided
+    if (sort) {
+      searchParams.set("sort", sort)
+    }
+    if (order) {
+      searchParams.set("order", order)
+    }
+
+    // Include filters if provided
+    if (filters) {
+      searchParams.set("filters", JSON.stringify(filters))
+    }
 
     const query = searchParams.toString()
     const url = `/instances/${instanceId}/torrents/economy?${query}`

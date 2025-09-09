@@ -28,7 +28,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getSortedRowModel,
   useReactTable
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -148,9 +147,10 @@ interface EconomyDashboardProps {
   }
   instanceId: number
   onPageChange?: (page: number, pageSize: number) => void
+  onSortingChange?: (sorting: { id: string; desc: boolean }[]) => void
 }
 
-export const EconomyDashboard = memo(function EconomyDashboard({ analysis, instanceId, onPageChange }: EconomyDashboardProps) {
+export const EconomyDashboard = memo(function EconomyDashboard({ analysis, instanceId, onPageChange, onSortingChange }: EconomyDashboardProps) {
   // State management
   const [sorting, setSorting] = usePersistedColumnSorting([{ id: "economyScore", desc: true }])
   const [globalFilter, setGlobalFilter] = useState("")
@@ -241,6 +241,15 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       previousSearchRef.current = effectiveSearch
     }
   }, [instanceId, effectiveSearch])
+
+  // Handler for backend sorting
+  const handleSortingChange = useCallback((newSorting: { id: string; desc: boolean }[]) => {
+    setSorting(newSorting)
+    // Trigger backend call with sorting parameters
+    if (onSortingChange) {
+      onSortingChange(newSorting)
+    }
+  }, [setSorting, onSortingChange])
 
   // Map TanStack Table column IDs to backend field names
 
@@ -394,8 +403,10 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
         setDeduplicationMin: setFilterDeduplicationMin,
         setDeduplicationMax: setFilterDeduplicationMax,
       },
+      sorting,
+      onSortingChange: handleSortingChange,
     }),
-    [incognitoMode, handleSelectAll, isSelectAllChecked, isSelectAllIndeterminate, handleRowSelection, isAllSelected, excludedFromSelectAll, filterScoreMin, filterScoreMax, filterDeduplicationMin, filterDeduplicationMax, setFilterScoreMin, setFilterScoreMax, setFilterDeduplicationMin, setFilterDeduplicationMax]
+    [incognitoMode, handleSelectAll, isSelectAllChecked, isSelectAllIndeterminate, handleRowSelection, isAllSelected, excludedFromSelectAll, filterScoreMin, filterScoreMax, filterDeduplicationMin, filterDeduplicationMax, setFilterScoreMin, setFilterScoreMax, setFilterDeduplicationMin, setFilterDeduplicationMax, sorting, handleSortingChange, onSortingChange]
   )
 
   const table = useReactTable({
@@ -403,19 +414,22 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    // Remove client-side sorting - will be handled by backend
+    // getSortedRowModel: getSortedRowModel(),
     // Use torrent hash with index as unique row ID to handle duplicates
     getRowId: (row: EconomyScore, index: number) => `${row.hash}-${index}`,
     // State management
     state: {
-      sorting,
+      // Remove sorting from state since it's handled by backend
+      // sorting,
       globalFilter,
       rowSelection,
       columnSizing,
       columnVisibility,
       columnOrder,
     },
-    onSortingChange: setSorting,
+    // Remove sorting change handler since sorting is backend-only
+    // onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onRowSelectionChange: setRowSelection,
     onColumnSizingChange: setColumnSizing,
@@ -477,7 +491,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const { rows } = table.getRowModel()
   const parentRef = useRef<HTMLDivElement>(null)
 
-  // Load more rows as user scrolls (only for progressive loading, not when using pagination)
+  // Load more rows as user scrolls (enhanced for large datasets)
   const loadMore = useCallback((): void => {
     // If we have pagination, don't do progressive loading
     if (totalPages > 1) {
@@ -493,8 +507,10 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
       setIsLoadingMoreRows(true)
 
+      // Load more aggressively for large datasets
+      const loadIncrement = filteredTorrents.length > 10000 ? 500 : filteredTorrents.length > 5000 ? 200 : 100
       setLoadedRows(prev => {
-        const newLoadedRows = Math.min(prev + 100, filteredTorrents.length)
+        const newLoadedRows = Math.min(prev + loadIncrement, filteredTorrents.length)
         return newLoadedRows
       })
 
@@ -506,14 +522,15 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     }
   }, [filteredTorrents.length, isLoadingMoreRows, loadedRows, page, totalPages, pageSize, onPageChange])
 
-  // Update loadedRows based on pagination mode
+  // Update loadedRows based on pagination mode and dataset size
   useEffect(() => {
     if (totalPages > 1) {
       // When using pagination, load all current page data
       setLoadedRows(filteredTorrents.length)
     } else {
-      // When using progressive loading, start with 100
-      setLoadedRows(prev => Math.min(prev, filteredTorrents.length) || 100)
+      // When using progressive loading, start with more rows for large datasets
+      const initialLoad = filteredTorrents.length > 10000 ? 1000 : filteredTorrents.length > 5000 ? 500 : filteredTorrents.length > 1000 ? 200 : 100
+      setLoadedRows(prev => Math.min(prev, filteredTorrents.length) || initialLoad)
     }
   }, [totalPages, filteredTorrents.length])
 
@@ -523,13 +540,13 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     getScrollElement: () => parentRef.current,
     estimateSize: () => 40,
     // Optimized overscan based on dataset size and pagination mode
-    overscan: totalPages > 1 ? 5 : filteredTorrents.length > 50000 ? 3 : filteredTorrents.length > 10000 ? 5 : filteredTorrents.length > 1000 ? 10 : 15,
+    overscan: totalPages > 1 ? 5 : filteredTorrents.length > 50000 ? 2 : filteredTorrents.length > 10000 ? 3 : filteredTorrents.length > 1000 ? 5 : 10,
     // Provide a key to help with item tracking - use hash with index for uniqueness
     getItemKey: useCallback((index: number) => {
       const row = rows[index]
       return row?.original?.hash ? `${row.original.hash}-${index}` : `loading-${index}`
     }, [rows]),
-    // Optimized onChange handler following TanStack Virtual best practices
+    // Enhanced onChange handler for better progressive loading
     onChange: (instance, sync) => {
       const vRows = instance.getVirtualItems();
       const lastItem = vRows.at(-1);
@@ -538,10 +555,15 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       // This prevents excessive loadMore calls during rapid scrolling
       const shouldCheckLoadMore = !sync || !instance.isScrolling
 
-      if (shouldCheckLoadMore && lastItem && lastItem.index >= safeLoadedRows - 50) {
-        // Load more if we're near the end of virtual rows OR if we might need more data from backend
-        if (safeLoadedRows < rows.length || (page < totalPages && onPageChange)) {
-          loadMore();
+      if (shouldCheckLoadMore && lastItem) {
+        // Calculate dynamic threshold based on dataset size
+        const threshold = filteredTorrents.length > 50000 ? 100 : filteredTorrents.length > 10000 ? 50 : 25
+
+        if (lastItem.index >= safeLoadedRows - threshold) {
+          // Load more if we're near the end of virtual rows OR if we might need more data from backend
+          if (safeLoadedRows < rows.length || (page < totalPages && onPageChange)) {
+            loadMore();
+          }
         }
       }
     },
@@ -1085,6 +1107,22 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
       {/* Table container */}
       <div className={`flex flex-col flex-1 min-h-0 mt-2 sm:mt-0 overflow-hidden ${effectiveSelectionCount > 0 ? 'pb-20' : ''}`}>
+        {/* Loading status indicator */}
+        {totalPages <= 1 && (
+          <div className="flex items-center justify-between px-2 py-1 text-xs text-muted-foreground bg-muted/30 border-b">
+            <span>
+              Showing {safeLoadedRows.toLocaleString()} of {filteredTorrents.length.toLocaleString()} torrents
+              {filteredTorrents.length < totalItems && ` (${totalItems.toLocaleString()} total)`}
+            </span>
+            {isLoadingMoreRows && (
+              <div className="flex items-center gap-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Loading...</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="relative flex-1 overflow-auto scrollbar-thin" ref={parentRef}>
           <div style={{ position: "relative", minWidth: "min-content" }}>
             {/* Header */}
@@ -1815,6 +1853,16 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Loading indicator for progressive loading */}
+      {isLoadingMoreRows && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-background/80 backdrop-blur-sm border rounded-lg px-4 py-2 shadow-lg z-40">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading more torrents...</span>
+          </div>
+        </div>
+      )}
 
       {/* Fancy Bottom Calculator Bar */}
       {effectiveSelectionCount > 0 && (

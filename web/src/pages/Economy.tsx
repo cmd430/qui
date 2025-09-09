@@ -11,12 +11,21 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EconomyDashboard } from "@/components/dashboard/EconomyDashboard"
 import { api } from "@/lib/api"
+import type { FilterOptions } from "@/types"
 import { Loader2, TrendingUp, AlertCircle } from "lucide-react"
 
 export function Economy() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(25) // Increased default page size for better performance
+  const [sortField, setSortField] = useState<string>("economyScore")
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [filters, setFilters] = useState<FilterOptions>({
+    status: [],
+    categories: [],
+    tags: [],
+    trackers: []
+  })
 
   // Get all instances
   const { data: instances, isLoading: instancesLoading } = useQuery({
@@ -24,14 +33,14 @@ export function Economy() {
     queryFn: () => api.getInstances(),
   })
 
-  // Get economy analysis for selected instance with pagination
+  // Get economy analysis for selected instance with pagination, sorting, and filtering
   const { data: economyData, isLoading: economyLoading, error } = useQuery({
-    queryKey: ["economy-analysis", selectedInstanceId, currentPage, pageSize],
+    queryKey: ["economy-analysis", selectedInstanceId, currentPage, pageSize, sortField, sortOrder, filters],
     queryFn: () => {
       if (!selectedInstanceId) return null
       
-      // Always send pagination parameters to ensure proper backend pagination
-      return api.getEconomyAnalysis(selectedInstanceId, currentPage, pageSize)
+      // Send all parameters to ensure proper backend filtering and sorting
+      return api.getEconomyAnalysis(selectedInstanceId, currentPage, pageSize, sortField, sortOrder, filters)
     },
     enabled: selectedInstanceId !== null,
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -41,6 +50,19 @@ export function Economy() {
   const handlePageChange = (page: number, newPageSize: number) => {
     setCurrentPage(page)
     setPageSize(newPageSize)
+  }
+
+  // Handle sorting changes
+  const handleSortingChange = (field: string, desc: boolean) => {
+    setSortField(field)
+    setSortOrder(desc ? 'desc' : 'asc')
+    setCurrentPage(1) // Reset to first page when sorting changes
+  }
+
+  // Handle filter changes
+  const handleFiltersChange = (newFilters: FilterOptions) => {
+    setFilters(newFilters)
+    setCurrentPage(1) // Reset to first page when filters change
   }
 
   // Reset pagination when instance changes
@@ -175,6 +197,12 @@ export function Economy() {
               analysis={economyData} 
               instanceId={selectedInstanceId} 
               onPageChange={handlePageChange}
+              onSortingChange={(sorting) => {
+                if (sorting.length > 0) {
+                  const sort = sorting[0]
+                  handleSortingChange(sort.id, sort.desc)
+                }
+              }}
             />
           ) : null}
         </>

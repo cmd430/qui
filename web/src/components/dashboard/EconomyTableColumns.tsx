@@ -43,6 +43,8 @@ interface ColumnOptions {
   excludedFromSelectAll?: Set<string>
   filters?: FilterState
   filterHandlers?: FilterHandlers
+  sorting?: { id: string; desc: boolean }[]
+  onSortingChange?: (sorting: { id: string; desc: boolean }[]) => void
 }
 
 export function createEconomyColumns(
@@ -59,7 +61,36 @@ export function createEconomyColumns(
     excludedFromSelectAll,
     filters,
     filterHandlers,
+    sorting,
+    onSortingChange,
   } = options
+
+  // Helper function for sortable headers
+  const createSortableHeader = (title: string, accessorKey: string) => {
+    const currentSort = sorting?.find(s => s.id === accessorKey)
+    const isSorted = !!currentSort
+    const isDesc = currentSort?.desc ?? false
+
+    return (
+      <Button
+        variant="ghost"
+        className="h-auto p-0 font-medium hover:bg-transparent"
+        onClick={() => {
+          if (onSortingChange) {
+            const newSorting = [{ id: accessorKey, desc: isSorted && !isDesc }]
+            onSortingChange(newSorting)
+          }
+        }}
+      >
+        {title}
+        {isSorted && (
+          <span className="ml-1">
+            {isDesc ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </span>
+        )}
+      </Button>
+    )
+  }
 
   return [
     {
@@ -132,7 +163,7 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "name",
-      header: "Name",
+      header: () => createSortableHeader("Name", "name"),
       cell: ({ row }: any) => {
         const torrent = row.original
 
@@ -153,7 +184,7 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "size",
-      header: "Size",
+      header: () => createSortableHeader("Size", "size"),
       cell: ({ row }: any) => formatBytes(row.original.size),
       size: 100,
       meta: {
@@ -162,7 +193,7 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "seeds",
-      header: "Seeds",
+      header: () => createSortableHeader("Seeds", "seeds"),
       cell: ({ row }: any) => {
         const seeds = row.original.seeds
         return (
@@ -178,7 +209,7 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "age",
-      header: "Age",
+      header: () => createSortableHeader("Age", "age"),
       cell: ({ row }: any) => `${row.original.age}d`,
       size: 80,
       meta: {
@@ -193,7 +224,7 @@ export function createEconomyColumns(
         return (
           <div className="flex flex-col">
             <div className="flex items-center gap-1">
-              <span className="font-medium">Economy Score</span>
+              {createSortableHeader("Economy Score", "economyScore")}
               <Button
                 variant="ghost"
                 size="sm"
@@ -256,7 +287,7 @@ export function createEconomyColumns(
     },
     {
       accessorKey: "ratio",
-      header: "Ratio",
+      header: () => createSortableHeader("Ratio", "ratio"),
       cell: ({ row }: any) => {
         const ratio = row.original.ratio
         return (
@@ -304,7 +335,7 @@ export function createEconomyColumns(
         return (
           <div className="flex flex-col">
             <div className="flex items-center gap-1">
-              <span className="font-medium">Deduplication</span>
+              {createSortableHeader("Deduplication", "deduplicationFactor")}
               <Button
                 variant="ghost"
                 size="sm"

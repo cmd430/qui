@@ -814,8 +814,23 @@ func (h *TorrentsHandler) GetEconomyAnalysis(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	// Parse sorting parameters
+	sortField := r.URL.Query().Get("sort")
+	sortDesc := false
+	if sortOrder := r.URL.Query().Get("order"); sortOrder == "desc" {
+		sortDesc = true
+	}
+
+	// Parse filters
+	var filters qbittorrent.FilterOptions
+	if filtersStr := r.URL.Query().Get("filters"); filtersStr != "" {
+		if err := json.Unmarshal([]byte(filtersStr), &filters); err != nil {
+			log.Warn().Err(err).Msg("Failed to parse filters, ignoring")
+		}
+	}
+
 	// Get economy analysis
-	analysis, err := h.syncManager.GetEconomyAnalysisWithPagination(r.Context(), instanceID, page, pageSize)
+	analysis, err := h.syncManager.GetEconomyAnalysisWithPaginationAndSorting(r.Context(), instanceID, page, pageSize, sortField, sortDesc, filters)
 	if err != nil {
 		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get economy analysis")
 		RespondError(w, http.StatusInternalServerError, "Failed to get economy analysis")
