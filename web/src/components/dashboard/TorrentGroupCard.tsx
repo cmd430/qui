@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -43,9 +43,19 @@ export function TorrentGroupCard({
   // Check if all torrents in group are selected
   const allSelected = group.torrents.every(torrent => selectedTorrents.has(torrent.hash))
 
+  // Get selected torrents from this group
+  const selectedHashesInGroup = group.torrents
+    .filter(torrent => selectedTorrents.has(torrent.hash))
+    .map(torrent => torrent.hash)
+
   const handleGroupSelect = (checked: boolean) => {
     const hashes = group.torrents.map(t => t.hash)
     onSelectGroup(hashes, checked)
+  }
+
+  const handleComplete = () => {
+    // Clear selections for this group
+    selectedHashesInGroup.forEach(hash => onSelectTorrent(hash, false))
   }
 
   const getGroupIcon = () => {
@@ -320,6 +330,23 @@ export function TorrentGroupCard({
             </div>
           </div>
         </CardContent>
+      )}
+
+      {/* Torrent Actions */}
+      {selectedHashesInGroup.length > 0 && (
+        <CardFooter className="pt-0">
+          <div className="flex justify-between items-center w-full">
+            <div className="text-sm text-muted-foreground">
+              {selectedHashesInGroup.length} torrent{selectedHashesInGroup.length !== 1 ? 's' : ''} selected
+            </div>
+            <TorrentActions
+              instanceId={instanceId}
+              selectedHashes={selectedHashesInGroup}
+              selectedTorrents={group.torrents.filter(torrent => selectedTorrents.has(torrent.hash))}
+              onComplete={handleComplete}
+            />
+          </div>
+        </CardFooter>
       )}
     </Card>
   )

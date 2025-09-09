@@ -62,6 +62,18 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
     }
   }
 
+  const handleSelectGroup = (hashes: string[], checked: boolean) => {
+    if (checked) {
+      setSelectedTorrents((prev: Set<string>) => new Set([...prev, ...hashes]))
+    } else {
+      setSelectedTorrents((prev: Set<string>) => {
+        const newSet = new Set(prev)
+        hashes.forEach((hash: string) => newSet.delete(hash))
+        return newSet
+      })
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Economy Overview Cards */}
@@ -461,7 +473,6 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                   <TorrentActions
                     instanceId={instanceId}
                     selectedHashes={Array.from(selectedTorrents)}
-                    selectedTorrents={currentTorrents.filter(t => selectedTorrents.has(t.hash))}
                     onComplete={() => setSelectedTorrents(new Set())}
                   />
                 </div>
