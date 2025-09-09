@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -160,6 +160,14 @@ export function TorrentGroupCard({
             </div>
           </div>
           <div className="flex items-center gap-1">
+            {selectedHashesInGroup.length > 0 && (
+              <TorrentActions
+                instanceId={instanceId}
+                selectedHashes={selectedHashesInGroup}
+                totalSelectionCount={selectedTorrents.size}
+                onComplete={handleComplete}
+              />
+            )}
             {group.torrents.length > 1 && (
               <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
                 <CollapsibleTrigger asChild>
@@ -209,6 +217,9 @@ export function TorrentGroupCard({
                             <span>{torrent.seeds} seeds</span>
                             <span>Score: {torrent.economyScore.toFixed(2)}</span>
                             <span>{torrent.age}d old</span>
+                            <span className="font-mono text-xs opacity-60">
+                              {torrent.hash.substring(0, 8)}...
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -335,21 +346,6 @@ export function TorrentGroupCard({
         </CardContent>
       )}
 
-      {/* Torrent Actions */}
-      {selectedHashesInGroup.length > 0 && (
-        <CardFooter className="pt-0 pb-2">
-          <div className="flex justify-between items-center w-full">
-            <div className="text-xs text-muted-foreground">
-              {selectedHashesInGroup.length} selected
-            </div>
-            <TorrentActions
-              instanceId={instanceId}
-              selectedHashes={selectedHashesInGroup}
-              onComplete={handleComplete}
-            />
-          </div>
-        </CardFooter>
-      )}
     </Card>
   )
 }
