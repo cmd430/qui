@@ -125,6 +125,103 @@ func NewEconomyService(syncManager *SyncManager) *EconomyService {
 	}
 }
 
+// Helper functions for common operations
+
+// createDuplicateHashSet creates a set of all duplicate hashes for quick lookup
+func createDuplicateHashSet(duplicates map[string][]string) map[string]bool {
+	duplicateHashes := make(map[string]bool, len(duplicates)*2) // Pre-allocate
+	for primaryHash, dupHashes := range duplicates {
+		duplicateHashes[primaryHash] = true
+		for _, hash := range dupHashes {
+			duplicateHashes[hash] = true
+		}
+	}
+	return duplicateHashes
+}
+
+// createScoreMap creates a map from hash to score pointer for quick lookup
+func createScoreMap(scores []EconomyScore) map[string]*EconomyScore {
+	scoreMap := make(map[string]*EconomyScore, len(scores))
+	for i := range scores {
+		scoreMap[scores[i].Hash] = &scores[i]
+	}
+	return scoreMap
+}
+
+// findBestCopyInGroup finds the best copy in a duplicate group by economy score
+func findBestCopyInGroup(hashes []string, scoreMap map[string]*EconomyScore) string {
+	if len(hashes) == 0 {
+		return ""
+	}
+
+	bestHash := hashes[0]
+	bestScore := float64(-1)
+
+	for _, hash := range hashes {
+		if score := scoreMap[hash]; score != nil && score.EconomyScore > bestScore {
+			bestHash = hash
+			bestScore = score.EconomyScore
+		}
+	}
+
+	return bestHash
+}
+
+// calculateRarityBonus calculates rarity bonus based on seed count
+func calculateRarityBonus(seeds int) float64 {
+	switch {
+	case seeds == 0:
+		return 10.0 // Extremely rare
+	case seeds < 5:
+		return 5.0 // Very rare
+	case seeds < 10:
+		return 2.0 // Rare
+	case seeds < 50:
+		return 1.0 // Moderately rare
+	default:
+		return 0.1 // Common
+	}
+}
+
+// calculateSeedFactor calculates seed factor based on duplicate status and other factors
+func calculateSeedFactor(seeds int, age int64, isDuplicate bool) float64 {
+	if isDuplicate {
+		if seeds == 0 {
+			return 1.5 // Extra bonus for being the last seed of duplicate content
+		}
+		return 1.0 // All live duplicates are equally valuable
+	}
+
+	// For unique torrents
+	if seeds == 0 {
+		return 3.0 // Major bonus for being the sole remaining seed
+	}
+
+	if seeds > 10 {
+		// Well-seeded unique torrents get penalized (especially old ones)
+		if age > 30 {
+			return 0.3 // Heavy penalty for old well-seeded unique content
+		} else if age > 7 {
+			return 0.6 // Medium penalty for moderately old well-seeded unique content
+		}
+		return 0.8 // Light penalty for new well-seeded unique content
+	}
+
+	if seeds > 5 {
+		// Moderately seeded unique torrents get some penalty
+		if age > 30 {
+			return 0.5
+		}
+		return 0.7
+	}
+
+	// Poorly seeded unique torrents (1-5 seeds) are more valuable
+	if age > 30 {
+		return 0.7 // Still penalized for age, but less than well-seeded
+	}
+	return 1.0 // Keep at base level
+}
+
 // AnalyzeEconomy performs a complete economy analysis for an instance
 func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*EconomyAnalysis, error) {
 	return es.AnalyzeEconomyWithPagination(ctx, instanceID, 1, 10)
@@ -153,12 +250,12 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	scores := es.calculateEconomyScores(torrents)
 
 	// Find duplicates
-	duplicates := es.findDuplicates(torrents, instanceID)
+	duplicates := es.findDuplicates(ctx, instanceID, torrents)
 
-	// Update scores with deduplication factors
+	// Apply deduplication factors and update scores
 	scores = es.applyDeduplicationFactors(scores, duplicates)
 
-	// Sort by economy score (highest first) for top valuable calculation
+	// Sort by economy score for top valuable (highest first)
 	sortedScores := make([]EconomyScore, len(scores))
 	copy(sortedScores, scores)
 	sort.Slice(sortedScores, func(i, j int) bool {
@@ -174,7 +271,7 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	// Calculate storage optimization data
 	storageOptimization := es.calculateStorageOptimization(scores, duplicates)
 
-	// Get top valuable torrents (from sorted copy)
+	// Get top valuable torrents
 	topValuable := sortedScores
 	if len(topValuable) > 20 {
 		topValuable = topValuable[:20]
@@ -184,10 +281,8 @@ func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, inst
 	reviewThreshold := es.calculateReviewThreshold(scores)
 	reviewTorrents := es.buildReviewTorrents(scores, reviewThreshold)
 
-	// Create torrent groups (legacy format)
+	// Create torrent groups
 	torrentGroups := es.createTorrentGroups(reviewTorrents)
-
-	// Create enhanced torrent groups with metadata
 	enhancedGroups := es.createEnhancedTorrentGroups(reviewTorrents, duplicates)
 
 	// Create paginated review torrents
@@ -232,8 +327,7 @@ func (es *EconomyService) calculateEconomyScores(torrents []qbt.Torrent) []Econo
 	scores := make([]EconomyScore, len(torrents))
 
 	for i, torrent := range torrents {
-		score := es.calculateSingleEconomyScore(torrent)
-		scores[i] = score
+		scores[i] = es.calculateSingleEconomyScore(torrent)
 	}
 
 	return scores
@@ -253,22 +347,8 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 	// Calculate retention score based on age and other factors
 	retentionScore := es.calculateRetentionScore(torrent, ageInDays, daysSinceActivity)
 
-	// Rarity bonus based on seed count (inverse relationship)
-	var rarityBonus float64
-	if torrent.NumSeeds == 0 {
-		rarityBonus = 10.0 // Extremely rare
-	} else if torrent.NumSeeds < 5 {
-		rarityBonus = 5.0 // Very rare
-	} else if torrent.NumSeeds < 10 {
-		rarityBonus = 2.0 // Rare
-	} else if torrent.NumSeeds < 50 {
-		rarityBonus = 1.0 // Moderately rare
-	} else {
-		rarityBonus = 0.1 // Common
-	}
-
-	// Calculate final economy score (retention-based, higher = keep longer)
-	economyScore := retentionScore
+	// Calculate rarity bonus
+	rarityBonus := calculateRarityBonus(int(torrent.NumSeeds))
 
 	return EconomyScore{
 		Hash:                torrent.Hash,
@@ -278,11 +358,11 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 		Peers:               int(torrent.NumLeechs),
 		Ratio:               torrent.Ratio,
 		Age:                 ageInDays,
-		EconomyScore:        economyScore,
+		EconomyScore:        retentionScore,
 		StorageValue:        storageValue,
 		RarityBonus:         rarityBonus,
-		DeduplicationFactor: 1.0,          // Will be updated later
-		ReviewPriority:      economyScore, // Use economy score for review priority
+		DeduplicationFactor: 1.0,            // Will be updated later
+		ReviewPriority:      retentionScore, // Use economy score for review priority
 		Tracker:             torrent.Tracker,
 		State:               string(torrent.State),
 		Category:            torrent.Category,
@@ -291,7 +371,6 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 }
 
 // calculateRetentionScore calculates how long content should be retained
-// This is the base score before considering duplicates - will be adjusted later for duplicate vs unique torrents
 func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays, daysSinceActivity int64) float64 {
 	// Base retention score starts high for new content
 	baseRetention := 100.0
@@ -336,88 +415,67 @@ func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays
 		categoryFactor = 1.3 // Educational/Documentary
 	}
 
-	// NOTE: Seed factor will be applied later in applyDeduplicationFactors based on whether torrent is unique or duplicate
-	// For now, we don't apply seed factor here since it depends on duplicate status
-
 	// Calculate base retention score without seed factor
-	retentionScore := baseRetention * ageFactor * activityBonus * ratioFactor * categoryFactor
-
-	return retentionScore
+	return baseRetention * ageFactor * activityBonus * ratioFactor * categoryFactor
 }
 
-// findDuplicates finds duplicate content based on name similarity and file overlap
-func (es *EconomyService) findDuplicates(torrents []qbt.Torrent, instanceID int) map[string][]string {
+// findDuplicates finds duplicate content based on name similarity only (bypassing file overlap for performance)
+func (es *EconomyService) findDuplicates(ctx context.Context, instanceID int, torrents []qbt.Torrent) map[string][]string {
 	duplicates := make(map[string][]string)
 
-	// Group by normalized name only (no size check)
+	// Group by normalized name only
 	contentGroups := make(map[string][]qbt.Torrent)
 
 	for _, torrent := range torrents {
 		// Normalize name for comparison
 		normalizedName := es.normalizeContentName(torrent.Name)
-
-		// Group only by normalized name - let file comparison determine duplicates
 		contentGroups[normalizedName] = append(contentGroups[normalizedName], torrent)
 	}
 
-	// For groups with multiple torrents, check file overlap
+	// For groups with multiple torrents, treat them as duplicates based on name match only
 	for _, group := range contentGroups {
 		if len(group) > 1 {
-			// Get file information for each torrent in the group
-			fileInfos := make(map[string]qbt.TorrentFiles)
-			validTorrents := make([]qbt.Torrent, 0)
+			// Use the first torrent as primary, rest as duplicates
+			primaryHash := group[0].Hash
+			var dupHashes []string
 
-			for _, torrent := range group {
-				files, err := es.getTorrentFiles(context.Background(), instanceID, torrent.Hash)
-				if err != nil {
-					log.Warn().Err(err).Str("hash", torrent.Hash).Msg("Failed to get files for torrent, skipping")
-					continue
-				}
-				fileInfos[torrent.Hash] = *files
-				validTorrents = append(validTorrents, torrent)
+			for i := 1; i < len(group); i++ {
+				dupHashes = append(dupHashes, group[i].Hash)
 			}
 
-			if len(validTorrents) < 2 {
-				continue
-			}
-
-			// Compare file overlap between all pairs
-			duplicatePairs := es.findFileOverlaps(fileInfos, validTorrents)
-
-			// Build the duplicates map
-			for primaryHash, dupHashes := range duplicatePairs {
-				if existing, exists := duplicates[primaryHash]; exists {
-					// Merge with existing duplicates
-					duplicates[primaryHash] = es.mergeUniqueHashes(existing, dupHashes)
-				} else {
-					duplicates[primaryHash] = dupHashes
-				}
-			}
+			duplicates[primaryHash] = dupHashes
 		}
 	}
 
 	log.Debug().
 		Int("duplicateGroups", len(duplicates)).
-		Msg("Found duplicate content groups based on file overlap")
+		Msg("Found duplicate content groups based on name matching")
 
 	return duplicates
 }
 
-// getTorrentFiles gets file information for a specific torrent
-func (es *EconomyService) getTorrentFiles(ctx context.Context, instanceID int, hash string) (*qbt.TorrentFiles, error) {
-	// Get client and sync manager
+// getBatchTorrentFiles gets file information for multiple torrents efficiently
+func (es *EconomyService) getBatchTorrentFiles(ctx context.Context, instanceID int, torrents []qbt.Torrent) map[string]qbt.TorrentFiles {
+	fileInfos := make(map[string]qbt.TorrentFiles)
+
+	// Get client once
 	client, _, err := es.syncManager.getClientAndSyncManager(ctx, instanceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get client: %w", err)
+		log.Warn().Err(err).Msg("Failed to get client for batch file retrieval")
+		return fileInfos
 	}
 
-	// Get files
-	files, err := client.GetFilesInformationCtx(ctx, hash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get torrent files: %w", err)
+	// Get files for each torrent
+	for _, torrent := range torrents {
+		files, err := client.GetFilesInformationCtx(ctx, torrent.Hash)
+		if err != nil {
+			log.Warn().Err(err).Str("hash", torrent.Hash).Msg("Failed to get files for torrent, skipping")
+			continue
+		}
+		fileInfos[torrent.Hash] = *files
 	}
 
-	return files, nil
+	return fileInfos
 }
 
 // findFileOverlaps compares file lists between torrents to find actual duplicates
@@ -462,11 +520,10 @@ func (es *EconomyService) hasSignificantFileOverlap(filesA, filesB qbt.TorrentFi
 	}
 
 	// Create maps for quick lookup
-	fileMapA := make(map[string]int64) // path -> size
+	fileMapA := make(map[string]int64)
 	fileMapB := make(map[string]int64)
 
 	for _, file := range filesA {
-		// Normalize path for comparison (remove leading slashes, normalize separators)
 		normalizedPath := es.normalizeFilePath(file.Name)
 		fileMapA[normalizedPath] = file.Size
 	}
@@ -487,10 +544,7 @@ func (es *EconomyService) hasSignificantFileOverlap(filesA, filesB qbt.TorrentFi
 	}
 
 	// Consider them duplicates if they have significant overlap
-	// Either: most files match, or if they have the same total file count and most match
 	overlapRatio := float64(matchingFiles) / float64(totalFilesA)
-
-	// Require at least 80% file overlap for single-file torrents, 60% for multi-file
 	minOverlap := 0.8
 	if len(fileMapA) > 1 {
 		minOverlap = 0.6
@@ -511,7 +565,7 @@ func (es *EconomyService) normalizeFilePath(path string) string {
 // mergeUniqueHashes merges two slices of hashes, removing duplicates
 func (es *EconomyService) mergeUniqueHashes(a, b []string) []string {
 	hashSet := make(map[string]bool)
-	result := make([]string, 0)
+	result := make([]string, 0, len(a)+len(b))
 
 	// Add all from a
 	for _, hash := range a {
@@ -560,122 +614,77 @@ func (es *EconomyService) normalizeContentName(name string) string {
 
 // applyDeduplicationFactors updates economy scores based on duplicates
 func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, duplicates map[string][]string) []EconomyScore {
-	scoreMap := make(map[string]*EconomyScore)
-	for i := range scores {
-		scoreMap[scores[i].Hash] = &scores[i]
+	if len(scores) == 0 {
+		return scores
 	}
 
-	// Create a set of all duplicate hashes for quick lookup
-	duplicateHashes := make(map[string]bool)
-	for primaryHash, dupHashes := range duplicates {
-		duplicateHashes[primaryHash] = true
-		for _, hash := range dupHashes {
-			duplicateHashes[hash] = true
-		}
-	}
+	// Pre-calculate shared data structures
+	scoreMap := createScoreMap(scores)
+	duplicateHashSet := createDuplicateHashSet(duplicates)
 
-	// First, apply seed factors and duplicate bonuses to all torrents
+	// Apply seed factors and duplicate bonuses
+	es.applySeedFactors(scores, duplicateHashSet)
+
+	// Handle duplicate groupings for storage optimization
+	es.processDuplicateGroups(scores, duplicates, scoreMap)
+
+	// Set review priority for unique torrents
+	es.setUniqueTorrentReviewPriorities(scores, duplicateHashSet)
+
+	return scores
+}
+
+// applySeedFactors applies seed factors based on duplicate status
+func (es *EconomyService) applySeedFactors(scores []EconomyScore, duplicateHashSet map[string]bool) {
 	for i := range scores {
 		score := &scores[i]
+		isDuplicate := duplicateHashSet[score.Hash]
 
-		// Apply seed factor based on duplicate status
-		seedFactor := 1.0
-		if duplicateHashes[score.Hash] {
-			// For duplicates: Seeds don't matter much since they're "free" storage
-			// But if we're the last seed (0 seeds reported), it's extremely valuable
-			if score.Seeds == 0 {
-				seedFactor = 1.5 // EXTRA bonus for being the last seed of duplicate content
-			} else {
-				seedFactor = 1.0 // All live duplicates are equally valuable regardless of seeds
-			}
+		// Apply seed factor
+		seedFactor := calculateSeedFactor(score.Seeds, score.Age, isDuplicate)
 
+		if isDuplicate {
 			// Duplicates get a significant bonus for being "free" storage
-			duplicateBonus := 2.5 // Major bonus for duplicates
-			score.EconomyScore = score.EconomyScore * seedFactor * duplicateBonus
+			score.EconomyScore = score.EconomyScore * seedFactor * 2.5
 		} else {
-			// For unique torrents: Well-seeded old content should score LOWEST
-			// Poorly seeded old content should score low but not as low as well-seeded
-			if score.Seeds == 0 {
-				// If we're seeding and it shows 0 seeds, WE ARE THE LAST SEED - extremely valuable!
-				seedFactor = 3.0 // Major bonus for being the sole remaining seed
-			} else if score.Seeds > 10 {
-				// Well-seeded unique torrents get penalized (especially old ones)
-				if score.Age > 30 {
-					seedFactor = 0.3 // Heavy penalty for old well-seeded unique content
-				} else if score.Age > 7 {
-					seedFactor = 0.6 // Medium penalty for moderately old well-seeded unique content
-				} else {
-					seedFactor = 0.8 // Light penalty for new well-seeded unique content
-				}
-			} else if score.Seeds > 5 {
-				// Moderately seeded unique torrents get some penalty
-				if score.Age > 30 {
-					seedFactor = 0.5
-				} else {
-					seedFactor = 0.7
-				}
-			} else {
-				// Poorly seeded unique torrents (1-5 seeds) are more valuable than well-seeded
-				// because they need our help more
-				if score.Age > 30 {
-					seedFactor = 0.7 // Still penalized for age, but less than well-seeded
-				} else {
-					seedFactor = 1.0 // Keep at base level
-				}
-			}
-
 			score.EconomyScore = score.EconomyScore * seedFactor
 		}
 	}
+}
 
-	// Now handle duplicate groupings for storage optimization purposes
+// processDuplicateGroups handles duplicate groupings for storage optimization
+func (es *EconomyService) processDuplicateGroups(scores []EconomyScore, duplicates map[string][]string, scoreMap map[string]*EconomyScore) {
 	for primaryHash, duplicateHashes := range duplicates {
-		primaryScore, exists := scoreMap[primaryHash]
-		if !exists {
+		if _, exists := scoreMap[primaryHash]; !exists {
 			continue
 		}
 
-		// Find the best copy in this duplicate group (highest economy score after adjustments)
-		bestHash := primaryHash
-		bestScore := primaryScore.EconomyScore
-
-		// Check all duplicates for higher economy score
+		// Find the best copy in this duplicate group
 		allHashes := append([]string{primaryHash}, duplicateHashes...)
-		for _, hash := range allHashes {
-			if score := scoreMap[hash]; score != nil {
-				if score.EconomyScore > bestScore {
-					bestHash = hash
-					bestScore = score.EconomyScore
-				}
-			}
-		}
+		bestHash := findBestCopyInGroup(allHashes, scoreMap)
 
-		// For storage optimization: mark the best copy as the "keeper" and others as potential removes
-		// But all duplicates keep their high economy scores for retention decisions
+		// Mark the best copy as the "keeper" and others as potential removes
 		for _, hash := range allHashes {
 			if score := scoreMap[hash]; score != nil {
 				if hash == bestHash {
-					// Best copy is the keeper for storage purposes
+					// Best copy is the keeper
 					score.DeduplicationFactor = 1.0
-					score.Duplicates = make([]string, 0)
+					score.Duplicates = make([]string, 0, len(allHashes)-1)
 					for _, h := range allHashes {
 						if h != bestHash {
 							score.Duplicates = append(score.Duplicates, h)
 						}
 					}
-					// Keep full review priority (economy score is already high due to duplicate bonus)
 					score.ReviewPriority = score.EconomyScore
 				} else {
 					// Other copies are marked for potential storage optimization
-					score.DeduplicationFactor = 0.0 // Mark as potential duplicate removal
-					// Keep high review priority since duplicates are valuable
-					// But slightly reduce it so the "best" copy is preferred
+					score.DeduplicationFactor = 0.0
 					score.ReviewPriority = score.EconomyScore * 0.95
 
-					// Populate duplicates array for all copies in the group
-					score.Duplicates = make([]string, 0)
+					// Populate duplicates array
+					score.Duplicates = make([]string, 0, len(allHashes)-1)
 					for _, h := range allHashes {
-						if h != hash { // Don't include self
+						if h != hash {
 							score.Duplicates = append(score.Duplicates, h)
 						}
 					}
@@ -683,18 +692,16 @@ func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, dupli
 			}
 		}
 	}
+}
 
-	// Set review priority for unique torrents (they already have their adjusted economy scores)
+// setUniqueTorrentReviewPriorities sets review priority for unique torrents
+func (es *EconomyService) setUniqueTorrentReviewPriorities(scores []EconomyScore, duplicateHashSet map[string]bool) {
 	for i := range scores {
 		score := &scores[i]
-		if !duplicateHashes[score.Hash] {
-			// This is a unique torrent - use the economy score as review priority
-			// Low economy score = high review priority (needs more attention)
+		if !duplicateHashSet[score.Hash] {
 			score.ReviewPriority = score.EconomyScore
 		}
 	}
-
-	return scores
 }
 
 // calculateStats calculates aggregated economy statistics
@@ -703,68 +710,24 @@ func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[s
 		return EconomyStats{}
 	}
 
+	// Pre-calculate shared data structures
+	scoreMap := createScoreMap(scores)
+
 	var totalStorage int64
-	var deduplicatedStorage int64
 	var totalEconomyScore float64
 	var highValueCount int
 	var rareContentCount int
 	var wellSeededOldCount int
 
-	// Create a set of duplicate hashes for quick lookup
-	duplicateHashes := make(map[string]bool)
-	for _, dupHashes := range duplicates {
-		for _, hash := range dupHashes {
-			duplicateHashes[hash] = true
-		}
-	}
+	// Calculate deduplicated storage using the same logic as storage optimization
+	deduplicatedStorage := es.calculateDeduplicatedStorage(scores, duplicates, scoreMap)
 
-	// For deduplicated storage, we need to count:
-	// - All non-duplicate torrents (full size)
-	// - Only the best copy from each duplicate group (full size)
-	// - Other duplicates contribute 0
-
-	// First, identify which torrents to count in deduplicated storage
-	countedHashes := make(map[string]bool)
-
-	// Add all non-duplicates
-	for _, score := range scores {
-		if !duplicateHashes[score.Hash] {
-			countedHashes[score.Hash] = true
-		}
-	}
-
-	// For each duplicate group, add only the best copy
-	for primaryHash, dupHashes := range duplicates {
-		allHashes := append([]string{primaryHash}, dupHashes...)
-
-		// Find the best copy (highest economy score)
-		bestHash := primaryHash
-		bestScore := float64(-1)
-
-		for _, hash := range allHashes {
-			for _, score := range scores {
-				if score.Hash == hash && score.EconomyScore > bestScore {
-					bestHash = hash
-					bestScore = score.EconomyScore
-					break
-				}
-			}
-		}
-
-		countedHashes[bestHash] = true
-	}
-
-	// Now calculate stats
+	// Calculate stats in a single pass
 	for _, score := range scores {
 		totalStorage += score.Size
 		totalEconomyScore += score.EconomyScore
 
-		// Only count the selected torrents in deduplicated storage
-		if countedHashes[score.Hash] {
-			deduplicatedStorage += score.Size
-		}
-
-		if score.EconomyScore > 50.0 { // Adjusted threshold for new scoring system
+		if score.EconomyScore > 50.0 {
 			highValueCount++
 		}
 
@@ -791,208 +754,71 @@ func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[s
 	}
 }
 
+// calculateDeduplicatedStorage calculates the storage used if we keep only the best copy of each duplicate group
+func (es *EconomyService) calculateDeduplicatedStorage(scores []EconomyScore, duplicates map[string][]string, scoreMap map[string]*EconomyScore) int64 {
+	countedHashes := make(map[string]bool)
+
+	// Add all non-duplicates
+	for _, score := range scores {
+		if _, isDuplicate := createDuplicateHashSet(duplicates)[score.Hash]; !isDuplicate {
+			countedHashes[score.Hash] = true
+		}
+	}
+
+	// For each duplicate group, add only the best copy
+	for primaryHash, dupHashes := range duplicates {
+		allHashes := append([]string{primaryHash}, dupHashes...)
+		bestHash := findBestCopyInGroup(allHashes, scoreMap)
+		countedHashes[bestHash] = true
+	}
+
+	// Calculate total deduplicated storage
+	var deduplicatedStorage int64
+	for _, score := range scores {
+		if countedHashes[score.Hash] {
+			deduplicatedStorage += score.Size
+		}
+	}
+
+	return deduplicatedStorage
+}
+
 // calculateOptimizationOpportunities identifies specific optimization opportunities
 func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomyScore, duplicates map[string][]string) []OptimizationOpportunity {
 	var opportunities []OptimizationOpportunity
 
-	// Create a map for quick score lookup
-	scoreMap := make(map[string]*EconomyScore)
-	for i := range scores {
-		scoreMap[scores[i].Hash] = &scores[i]
+	// Pre-calculate shared data structures
+	scoreMap := createScoreMap(scores)
+	duplicateHashSet := createDuplicateHashSet(duplicates)
+
+	// 1. Duplicate removal opportunities
+	if dupOp := es.createDuplicateRemovalOpportunity(scores, duplicates, scoreMap); dupOp != nil {
+		opportunities = append(opportunities, *dupOp)
 	}
 
-	// 1. Duplicate removal opportunities - keep the most valuable copy of each group
-	if len(duplicates) > 0 {
-		var duplicateHashesToRemove []string
-		var totalSavings int64
-
-		for primaryHash, dupHashes := range duplicates {
-			primaryScore := scoreMap[primaryHash]
-			if primaryScore == nil {
-				continue
-			}
-
-			// Find the most valuable copy in this duplicate group
-			bestHash := primaryHash
-			bestScore := primaryScore.EconomyScore
-
-			// Check all duplicates for higher economy score
-			allHashes := append([]string{primaryHash}, dupHashes...)
-			for _, hash := range allHashes {
-				if score := scoreMap[hash]; score != nil {
-					if score.EconomyScore > bestScore {
-						bestHash = hash
-						bestScore = score.EconomyScore
-					}
-				}
-			}
-
-			// Remove all copies except the best one
-			for _, hash := range allHashes {
-				if hash != bestHash {
-					if score := scoreMap[hash]; score != nil {
-						duplicateHashesToRemove = append(duplicateHashesToRemove, hash)
-						totalSavings += score.Size
-					}
-				}
-			}
-		}
-
-		if len(duplicateHashesToRemove) > 0 {
-			opportunities = append(opportunities, OptimizationOpportunity{
-				Type:        "cross_seeding_opportunity",
-				Title:       "Remove Duplicate Content",
-				Description: fmt.Sprintf("Remove %d duplicate torrents while keeping the most valuable copy of each content group", len(duplicateHashesToRemove)),
-				Priority:    "high",
-				Savings:     totalSavings,
-				Impact:      85.0,
-				Torrents:    duplicateHashesToRemove,
-				Category:    "storage",
-			})
-		}
-	}
-
-	// 2. Old well-seeded unique content cleanup - these now have the lowest scores and are least desired
-	var oldWellSeededHashes []string
-	var oldWellSeededSize int64
-
-	// Create set of all duplicate hashes for quick lookup
-	duplicateHashSet := make(map[string]bool)
-	for primaryHash, dupHashes := range duplicates {
-		duplicateHashSet[primaryHash] = true
-		for _, hash := range dupHashes {
-			duplicateHashSet[hash] = true
-		}
-	}
-
-	for _, score := range scores {
-		// Target unique (non-duplicate) torrents that are old, well-seeded, and have low economy scores
-		// These are the least desired according to the new scoring logic
-		if !duplicateHashSet[score.Hash] && score.Seeds > 10 && score.Age > 60 && score.EconomyScore < 30.0 {
-			oldWellSeededHashes = append(oldWellSeededHashes, score.Hash)
-			oldWellSeededSize += score.Size
-		}
-	}
-
-	if len(oldWellSeededHashes) > 0 {
-		savings := int64(float64(oldWellSeededSize) * 0.8) // Assume 80% can be cleaned up
-		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "old_content_cleanup",
-			Title:       "Clean Up Old Well-Seeded Unique Content",
-			Description: fmt.Sprintf("Remove %d old, well-seeded unique torrents that are easily replaceable and have low retention value", len(oldWellSeededHashes)),
-			Priority:    "high", // Changed to high priority since these are now the least desired
-			Savings:     savings,
-			Impact:      75.0, // Increased impact
-			Torrents:    oldWellSeededHashes,
-			Category:    "storage",
-		})
+	// 2. Old well-seeded unique content cleanup
+	if oldOp := es.createOldContentCleanupOpportunity(scores, duplicateHashSet); oldOp != nil {
+		opportunities = append(opportunities, *oldOp)
 	}
 
 	// 3. Ratio optimization opportunities
-	var lowRatioHashes []string
-	var lowRatioSize int64
-
-	for _, score := range scores {
-		if score.Ratio < 0.5 && score.State == "seeding" && score.Age > 7 { // Low ratio, actively seeding, not brand new
-			lowRatioHashes = append(lowRatioHashes, score.Hash)
-			lowRatioSize += score.Size
-		}
-	}
-
-	if len(lowRatioHashes) > 0 {
-		savings := int64(float64(lowRatioSize) * 0.6) // Assume 60% can be optimized
-		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "ratio_optimization",
-			Title:       "Optimize Low-Ratio Torrents",
-			Description: fmt.Sprintf("Consider removing or reseeding %d torrents with poor upload/download ratios", len(lowRatioHashes)),
-			Priority:    "medium",
-			Savings:     savings,
-			Impact:      55.0,
-			Torrents:    lowRatioHashes,
-			Category:    "seeding",
-		})
+	if ratioOp := es.createRatioOptimizationOpportunity(scores); ratioOp != nil {
+		opportunities = append(opportunities, *ratioOp)
 	}
 
 	// 4. Unused content opportunities
-	var unusedHashes []string
-	var unusedSize int64
-
-	for _, score := range scores {
-		if score.State == "paused" && score.LastActivity == 0 && score.Age > 30 { // Paused, never active, old
-			unusedHashes = append(unusedHashes, score.Hash)
-			unusedSize += score.Size
-		}
-	}
-
-	if len(unusedHashes) > 0 {
-		savings := int64(float64(unusedSize) * 0.9) // Assume 90% can be removed
-		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "unused_content_cleanup",
-			Title:       "Remove Unused Content",
-			Description: fmt.Sprintf("Remove %d paused torrents that have never been active", len(unusedHashes)),
-			Priority:    "low",
-			Savings:     savings,
-			Impact:      75.0,
-			Torrents:    unusedHashes,
-			Category:    "storage",
-		})
+	if unusedOp := es.createUnusedContentOpportunity(scores); unusedOp != nil {
+		opportunities = append(opportunities, *unusedOp)
 	}
 
 	// 5. Critical preservation - torrents where we're the last seed
-	var lastSeedHashes []string
-	var lastSeedSize int64
-
-	for _, score := range scores {
-		if score.Seeds == 0 { // We're the last seed - extremely critical
-			lastSeedHashes = append(lastSeedHashes, score.Hash)
-			lastSeedSize += score.Size
-		}
+	if lastSeedOp := es.createLastSeedOpportunity(scores); lastSeedOp != nil {
+		opportunities = append(opportunities, *lastSeedOp)
 	}
 
-	if len(lastSeedHashes) > 0 {
-		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "preserve_last_seed",
-			Title:       "CRITICAL: Preserve Torrents Where We're The Last Seed",
-			Description: fmt.Sprintf("NEVER REMOVE: %d torrents where we are the sole remaining seeder - removing these would make the content permanently unavailable", len(lastSeedHashes)),
-			Priority:    "critical",    // New priority level
-			Savings:     -lastSeedSize, // Negative savings = content to preserve
-			Impact:      100.0,         // Maximum impact
-			Torrents:    lastSeedHashes,
-			Category:    "preservation",
-		})
-	}
-
-	// 6. High-value content preservation - duplicates, rare unique content, and torrents where we're the last seed
-	var highValueHashes []string
-	var highValueSize int64
-
-	for _, score := range scores {
-		// High value includes:
-		// - All duplicates (they have high economy scores due to duplicate bonus)
-		// - Rare unique content with decent scores
-		// - Any torrent where we're the last seed (0 seeds = we're the only one left)
-		isDuplicate := duplicateHashSet[score.Hash]
-		isLastSeed := score.Seeds == 0
-
-		if (isDuplicate && score.EconomyScore > 50.0) ||
-			(!isDuplicate && score.EconomyScore > 60.0 && score.Seeds < 5) ||
-			isLastSeed { // Always preserve torrents where we're the last seed
-			highValueHashes = append(highValueHashes, score.Hash)
-			highValueSize += score.Size
-		}
-	}
-
-	if len(highValueHashes) > 0 {
-		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "preserve_rare_content",
-			Title:       "Preserve Critical Content",
-			Description: fmt.Sprintf("Ensure %d critical torrents (duplicates, rare unique content, and torrents where we're the last seed) are properly seeded and backed up", len(highValueHashes)),
-			Priority:    "high",
-			Savings:     -highValueSize, // Negative savings = content to preserve
-			Impact:      95.0,
-			Torrents:    highValueHashes,
-			Category:    "seeding",
-		})
+	// 6. High-value content preservation
+	if highValueOp := es.createHighValueOpportunity(scores, duplicateHashSet); highValueOp != nil {
+		opportunities = append(opportunities, *highValueOp)
 	}
 
 	// Sort by impact (highest first)
@@ -1003,80 +829,216 @@ func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomySco
 	return opportunities
 }
 
+// createDuplicateRemovalOpportunity creates duplicate removal optimization opportunity
+func (es *EconomyService) createDuplicateRemovalOpportunity(scores []EconomyScore, duplicates map[string][]string, scoreMap map[string]*EconomyScore) *OptimizationOpportunity {
+	if len(duplicates) == 0 {
+		return nil
+	}
+
+	var duplicateHashesToRemove []string
+	var totalSavings int64
+
+	for primaryHash, dupHashes := range duplicates {
+		allHashes := append([]string{primaryHash}, dupHashes...)
+		bestHash := findBestCopyInGroup(allHashes, scoreMap)
+
+		// Remove all copies except the best one
+		for _, hash := range allHashes {
+			if hash != bestHash {
+				if score := scoreMap[hash]; score != nil {
+					duplicateHashesToRemove = append(duplicateHashesToRemove, hash)
+					totalSavings += score.Size
+				}
+			}
+		}
+	}
+
+	if len(duplicateHashesToRemove) == 0 {
+		return nil
+	}
+
+	return &OptimizationOpportunity{
+		Type:        "cross_seeding_opportunity",
+		Title:       "Remove Duplicate Content",
+		Description: fmt.Sprintf("Remove %d duplicate torrents while keeping the most valuable copy of each content group", len(duplicateHashesToRemove)),
+		Priority:    "high",
+		Savings:     totalSavings,
+		Impact:      85.0,
+		Torrents:    duplicateHashesToRemove,
+		Category:    "storage",
+	}
+}
+
+// createOldContentCleanupOpportunity creates old content cleanup optimization opportunity
+func (es *EconomyService) createOldContentCleanupOpportunity(scores []EconomyScore, duplicateHashSet map[string]bool) *OptimizationOpportunity {
+	var oldWellSeededHashes []string
+	var oldWellSeededSize int64
+
+	for _, score := range scores {
+		if !duplicateHashSet[score.Hash] && score.Seeds > 10 && score.Age > 60 && score.EconomyScore < 30.0 {
+			oldWellSeededHashes = append(oldWellSeededHashes, score.Hash)
+			oldWellSeededSize += score.Size
+		}
+	}
+
+	if len(oldWellSeededHashes) == 0 {
+		return nil
+	}
+
+	savings := int64(float64(oldWellSeededSize) * 0.8)
+	return &OptimizationOpportunity{
+		Type:        "old_content_cleanup",
+		Title:       "Clean Up Old Well-Seeded Unique Content",
+		Description: fmt.Sprintf("Remove %d old, well-seeded unique torrents that are easily replaceable and have low retention value", len(oldWellSeededHashes)),
+		Priority:    "high",
+		Savings:     savings,
+		Impact:      75.0,
+		Torrents:    oldWellSeededHashes,
+		Category:    "storage",
+	}
+}
+
+// createRatioOptimizationOpportunity creates ratio optimization opportunity
+func (es *EconomyService) createRatioOptimizationOpportunity(scores []EconomyScore) *OptimizationOpportunity {
+	var lowRatioHashes []string
+	var lowRatioSize int64
+
+	for _, score := range scores {
+		if score.Ratio < 0.5 && score.State == "seeding" && score.Age > 7 {
+			lowRatioHashes = append(lowRatioHashes, score.Hash)
+			lowRatioSize += score.Size
+		}
+	}
+
+	if len(lowRatioHashes) == 0 {
+		return nil
+	}
+
+	savings := int64(float64(lowRatioSize) * 0.6)
+	return &OptimizationOpportunity{
+		Type:        "ratio_optimization",
+		Title:       "Optimize Low-Ratio Torrents",
+		Description: fmt.Sprintf("Consider removing or reseeding %d torrents with poor upload/download ratios", len(lowRatioHashes)),
+		Priority:    "medium",
+		Savings:     savings,
+		Impact:      55.0,
+		Torrents:    lowRatioHashes,
+		Category:    "seeding",
+	}
+}
+
+// createUnusedContentOpportunity creates unused content opportunity
+func (es *EconomyService) createUnusedContentOpportunity(scores []EconomyScore) *OptimizationOpportunity {
+	var unusedHashes []string
+	var unusedSize int64
+
+	for _, score := range scores {
+		if score.State == "paused" && score.LastActivity == 0 && score.Age > 30 {
+			unusedHashes = append(unusedHashes, score.Hash)
+			unusedSize += score.Size
+		}
+	}
+
+	if len(unusedHashes) == 0 {
+		return nil
+	}
+
+	savings := int64(float64(unusedSize) * 0.9)
+	return &OptimizationOpportunity{
+		Type:        "unused_content_cleanup",
+		Title:       "Remove Unused Content",
+		Description: fmt.Sprintf("Remove %d paused torrents that have never been active", len(unusedHashes)),
+		Priority:    "low",
+		Savings:     savings,
+		Impact:      75.0,
+		Torrents:    unusedHashes,
+		Category:    "storage",
+	}
+}
+
+// createLastSeedOpportunity creates last seed preservation opportunity
+func (es *EconomyService) createLastSeedOpportunity(scores []EconomyScore) *OptimizationOpportunity {
+	var lastSeedHashes []string
+	var lastSeedSize int64
+
+	for _, score := range scores {
+		if score.Seeds == 0 {
+			lastSeedHashes = append(lastSeedHashes, score.Hash)
+			lastSeedSize += score.Size
+		}
+	}
+
+	if len(lastSeedHashes) == 0 {
+		return nil
+	}
+
+	return &OptimizationOpportunity{
+		Type:        "preserve_last_seed",
+		Title:       "CRITICAL: Preserve Torrents Where We're The Last Seed",
+		Description: fmt.Sprintf("NEVER REMOVE: %d torrents where we are the sole remaining seeder - removing these would make the content permanently unavailable", len(lastSeedHashes)),
+		Priority:    "critical",
+		Savings:     -lastSeedSize,
+		Impact:      100.0,
+		Torrents:    lastSeedHashes,
+		Category:    "preservation",
+	}
+}
+
+// createHighValueOpportunity creates high-value content preservation opportunity
+func (es *EconomyService) createHighValueOpportunity(scores []EconomyScore, duplicateHashSet map[string]bool) *OptimizationOpportunity {
+	var highValueHashes []string
+	var highValueSize int64
+
+	for _, score := range scores {
+		isDuplicate := duplicateHashSet[score.Hash]
+		isLastSeed := score.Seeds == 0
+
+		if (isDuplicate && score.EconomyScore > 50.0) ||
+			(!isDuplicate && score.EconomyScore > 60.0 && score.Seeds < 5) ||
+			isLastSeed {
+			highValueHashes = append(highValueHashes, score.Hash)
+			highValueSize += score.Size
+		}
+	}
+
+	if len(highValueHashes) == 0 {
+		return nil
+	}
+
+	return &OptimizationOpportunity{
+		Type:        "preserve_rare_content",
+		Title:       "Preserve Critical Content",
+		Description: fmt.Sprintf("Ensure %d critical torrents (duplicates, rare unique content, and torrents where we're the last seed) are properly seeded and backed up", len(highValueHashes)),
+		Priority:    "high",
+		Savings:     -highValueSize,
+		Impact:      95.0,
+		Torrents:    highValueHashes,
+		Category:    "seeding",
+	}
+}
+
 // calculateStorageOptimization calculates comprehensive storage optimization data
 func (es *EconomyService) calculateStorageOptimization(scores []EconomyScore, duplicates map[string][]string) StorageOptimization {
-	// Create a map for quick score lookup
-	scoreMap := make(map[string]*EconomyScore)
-	for i := range scores {
-		scoreMap[scores[i].Hash] = &scores[i]
-	}
+	// Pre-calculate shared data structures
+	scoreMap := createScoreMap(scores)
+	duplicateHashSet := createDuplicateHashSet(duplicates)
 
 	var deduplicationSavings int64
 	var oldContentCleanupSavings int64
 	var ratioOptimizationSavings int64
 	var unusedContentSavings int64
 
-	// Calculate deduplication savings - keep the most valuable copy of each group
-	for primaryHash, dupHashes := range duplicates {
-		primaryScore := scoreMap[primaryHash]
-		if primaryScore == nil {
-			continue
-		}
+	// Calculate deduplication savings
+	deduplicationSavings = es.calculateDeduplicationSavings(duplicates, scoreMap)
 
-		// Find the most valuable copy in this duplicate group
-		bestHash := primaryHash
-		bestScore := primaryScore.EconomyScore
-
-		// Check all duplicates for higher economy score
-		allHashes := append([]string{primaryHash}, dupHashes...)
-		for _, hash := range allHashes {
-			if score := scoreMap[hash]; score != nil {
-				if score.EconomyScore > bestScore {
-					bestHash = hash
-					bestScore = score.EconomyScore
-				}
-			}
-		}
-
-		// Calculate savings from removing all copies except the best one
-		for _, hash := range allHashes {
-			if hash != bestHash {
-				if score := scoreMap[hash]; score != nil {
-					deduplicationSavings += score.Size
-				}
-			}
-		}
-	}
-
-	// Calculate old content cleanup savings - target unique well-seeded old torrents (lowest scores)
-	duplicateHashSet := make(map[string]bool)
-	for primaryHash, dupHashes := range duplicates {
-		duplicateHashSet[primaryHash] = true
-		for _, hash := range dupHashes {
-			duplicateHashSet[hash] = true
-		}
-	}
-
-	for _, score := range scores {
-		// Target unique (non-duplicate) torrents that are old, well-seeded, and have low economy scores
-		if !duplicateHashSet[score.Hash] && score.Seeds > 10 && score.Age > 60 && score.EconomyScore < 30.0 {
-			oldContentCleanupSavings += score.Size
-		}
-	}
+	// Calculate old content cleanup savings
+	oldContentCleanupSavings = es.calculateOldContentCleanupSavings(scores, duplicateHashSet)
 
 	// Calculate ratio optimization savings
-	for _, score := range scores {
-		if score.Ratio < 0.5 && score.State == "seeding" && score.Age > 7 {
-			ratioOptimizationSavings += score.Size
-		}
-	}
+	ratioOptimizationSavings = es.calculateRatioOptimizationSavings(scores)
 
 	// Calculate unused content savings
-	for _, score := range scores {
-		if score.State == "paused" && score.LastActivity == 0 && score.Age > 30 {
-			unusedContentSavings += score.Size
-		}
-	}
+	unusedContentSavings = es.calculateUnusedContentSavings(scores)
 
 	totalPotentialSavings := deduplicationSavings + oldContentCleanupSavings + ratioOptimizationSavings + unusedContentSavings
 
@@ -1089,7 +1051,65 @@ func (es *EconomyService) calculateStorageOptimization(scores []EconomyScore, du
 	}
 }
 
-// formatBytes formats bytes into human readable format
+// calculateDeduplicationSavings calculates savings from removing duplicate content
+func (es *EconomyService) calculateDeduplicationSavings(duplicates map[string][]string, scoreMap map[string]*EconomyScore) int64 {
+	var savings int64
+
+	for primaryHash, dupHashes := range duplicates {
+		allHashes := append([]string{primaryHash}, dupHashes...)
+		bestHash := findBestCopyInGroup(allHashes, scoreMap)
+
+		// Calculate savings from removing all copies except the best one
+		for _, hash := range allHashes {
+			if hash != bestHash {
+				if score := scoreMap[hash]; score != nil {
+					savings += score.Size
+				}
+			}
+		}
+	}
+
+	return savings
+}
+
+// calculateOldContentCleanupSavings calculates savings from cleaning up old well-seeded content
+func (es *EconomyService) calculateOldContentCleanupSavings(scores []EconomyScore, duplicateHashSet map[string]bool) int64 {
+	var savings int64
+
+	for _, score := range scores {
+		if !duplicateHashSet[score.Hash] && score.Seeds > 10 && score.Age > 60 && score.EconomyScore < 30.0 {
+			savings += score.Size
+		}
+	}
+
+	return savings
+}
+
+// calculateRatioOptimizationSavings calculates savings from ratio optimization
+func (es *EconomyService) calculateRatioOptimizationSavings(scores []EconomyScore) int64 {
+	var savings int64
+
+	for _, score := range scores {
+		if score.Ratio < 0.5 && score.State == "seeding" && score.Age > 7 {
+			savings += score.Size
+		}
+	}
+
+	return savings
+}
+
+// calculateUnusedContentSavings calculates savings from removing unused content
+func (es *EconomyService) calculateUnusedContentSavings(scores []EconomyScore) int64 {
+	var savings int64
+
+	for _, score := range scores {
+		if score.State == "paused" && score.LastActivity == 0 && score.Age > 30 {
+			savings += score.Size
+		}
+	}
+
+	return savings
+} // formatBytes formats bytes into human readable format
 func (es *EconomyService) formatBytes(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
@@ -1257,20 +1277,9 @@ func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomySc
 	processed := make(map[string]bool)
 	groupID := 1
 
-	// Create a quick lookup map for review torrents
-	reviewTorrentMap := make(map[string]EconomyScore)
-	for _, torrent := range reviewTorrents {
-		reviewTorrentMap[torrent.Hash] = torrent
-	}
-
-	// Create a set of all duplicate hashes for quick lookup
-	duplicateHashSet := make(map[string]bool)
-	for primaryHash, dupHashes := range duplicates {
-		duplicateHashSet[primaryHash] = true
-		for _, hash := range dupHashes {
-			duplicateHashSet[hash] = true
-		}
-	}
+	// Pre-calculate shared data structures
+	reviewTorrentMap := createScoreMap(reviewTorrents)
+	duplicateHashSet := createDuplicateHashSet(duplicates)
 
 	for _, torrent := range reviewTorrents {
 		if processed[torrent.Hash] {
@@ -1284,8 +1293,8 @@ func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomySc
 		// Add all duplicates of this torrent that are also in review torrents
 		if len(torrent.Duplicates) > 0 {
 			for _, dupHash := range torrent.Duplicates {
-				if dupTorrent, exists := reviewTorrentMap[dupHash]; exists && !processed[dupHash] {
-					groupTorrents = append(groupTorrents, dupTorrent)
+				if dupTorrent := reviewTorrentMap[dupHash]; dupTorrent != nil && !processed[dupHash] {
+					groupTorrents = append(groupTorrents, *dupTorrent)
 					processed[dupHash] = true
 				}
 			}
@@ -1316,38 +1325,10 @@ func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomySc
 		})
 
 		// Determine group type and recommended action
-		groupType := "unique"
-		recommendedAction := "review"
-		hasLastSeed := false
-
-		for _, t := range groupTorrents {
-			if t.Seeds == 0 {
-				hasLastSeed = true
-				break
-			}
-		}
-
-		if len(groupTorrents) > 1 {
-			groupType = "duplicate"
-			if hasLastSeed {
-				recommendedAction = "preserve"
-			} else {
-				recommendedAction = "keep_best"
-			}
-		} else if hasLastSeed {
-			groupType = "last_seed"
-			recommendedAction = "preserve"
-		} else if duplicateHashSet[torrent.Hash] {
-			groupType = "duplicate"
-			recommendedAction = "keep_best"
-		}
+		groupType, recommendedAction := es.determineGroupTypeAndAction(groupTorrents, duplicateHashSet)
 
 		// Calculate sizes and savings
-		var totalSize int64
-		for _, t := range groupTorrents {
-			totalSize += t.Size
-		}
-
+		totalSize := es.calculateGroupTotalSize(groupTorrents)
 		deduplicatedSize := groupTorrents[0].Size // Size of the best (first) torrent
 		potentialSavings := totalSize - deduplicatedSize
 		if potentialSavings < 0 {
@@ -1372,6 +1353,58 @@ func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomySc
 	}
 
 	// Sort groups by priority (lowest priority value = highest urgency)
+	es.sortEnhancedGroupsByPriority(enhancedGroups)
+
+	// Update priority numbers to be sequential
+	for i := range enhancedGroups {
+		enhancedGroups[i].Priority = i + 1
+	}
+
+	return enhancedGroups
+}
+
+// determineGroupTypeAndAction determines the group type and recommended action
+func (es *EconomyService) determineGroupTypeAndAction(groupTorrents []EconomyScore, duplicateHashSet map[string]bool) (string, string) {
+	groupType := "unique"
+	recommendedAction := "review"
+	hasLastSeed := false
+
+	for _, t := range groupTorrents {
+		if t.Seeds == 0 {
+			hasLastSeed = true
+			break
+		}
+	}
+
+	if len(groupTorrents) > 1 {
+		groupType = "duplicate"
+		if hasLastSeed {
+			recommendedAction = "preserve"
+		} else {
+			recommendedAction = "keep_best"
+		}
+	} else if hasLastSeed {
+		groupType = "last_seed"
+		recommendedAction = "preserve"
+	} else if duplicateHashSet[groupTorrents[0].Hash] {
+		groupType = "duplicate"
+		recommendedAction = "keep_best"
+	}
+
+	return groupType, recommendedAction
+}
+
+// calculateGroupTotalSize calculates the total size of all torrents in a group
+func (es *EconomyService) calculateGroupTotalSize(groupTorrents []EconomyScore) int64 {
+	var totalSize int64
+	for _, t := range groupTorrents {
+		totalSize += t.Size
+	}
+	return totalSize
+}
+
+// sortEnhancedGroupsByPriority sorts enhanced groups by priority
+func (es *EconomyService) sortEnhancedGroupsByPriority(enhancedGroups []TorrentGroup) {
 	sort.Slice(enhancedGroups, func(i, j int) bool {
 		// Last seed groups get highest priority
 		if enhancedGroups[i].GroupType == "last_seed" && enhancedGroups[j].GroupType != "last_seed" {
@@ -1383,13 +1416,6 @@ func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomySc
 		// Then by review priority
 		return enhancedGroups[i].Priority < enhancedGroups[j].Priority
 	})
-
-	// Update priority numbers to be sequential
-	for i := range enhancedGroups {
-		enhancedGroups[i].Priority = i + 1
-	}
-
-	return enhancedGroups
 }
 
 // CreatePaginatedReviewTorrents creates a properly paginated PaginatedReviewTorrents structure
