@@ -32,7 +32,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
   // Get low-value torrents for review (including duplicates with 0 score)
   const buildReviewTorrents = () => {
     const baseTorrents = analysis.scores
-      .filter(score => score.economyScore >= 0) // Include duplicates (score = 0) but exclude invalid scores
+      .filter(score => score.economyScore < 2.0) // Only include torrents that actually need review
       .sort((a, b) => {
         // Sort by economy score first (lowest first), then by size for same scores
         if (a.economyScore !== b.economyScore) {
@@ -119,8 +119,8 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
 
       findRelated(torrent.hash)
 
-      // Sort group by economy score (highest first)
-      group.sort((a, b) => b.economyScore - a.economyScore)
+      // Sort group by economy score (lowest first for review)
+      group.sort((a, b) => a.economyScore - b.economyScore)
 
       groups.push(group)
     }
@@ -202,7 +202,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
       await api.bulkAction(instanceId, {
         hashes: Array.from(selectedTorrents),
         action: "delete",
-        deleteFiles: false, // Also delete files from disk 
+        deleteFiles: false,
       })
       
       // Clear selection after successful removal
@@ -223,7 +223,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
       await api.bulkAction(instanceId, {
         hashes: [hash],
         action: "delete",
-        deleteFiles: true,
+        deleteFiles: false,
       })
       // Could add a success notification here
     } catch (error) {
