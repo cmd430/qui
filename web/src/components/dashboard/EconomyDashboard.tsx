@@ -28,6 +28,7 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
+  getSortedRowModel,
   useReactTable
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
@@ -389,6 +390,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     // Use torrent hash with index as unique row ID to handle duplicates
     getRowId: (row: EconomyScore, index: number) => `${row.hash}-${index}`,
     // State management
@@ -1068,23 +1070,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
           </div>
           {/* Action buttons */}
           <div className="flex gap-1 sm:gap-2 flex-shrink-0">
-            {/* Preview button */}
-            {effectiveSelectionCount > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowPreviewDialog(true)}
-                  >
-                    <Calculator className="h-4 w-4" />
-                    <span className="sr-only">Impact analysis</span>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>View detailed impact analysis</TooltipContent>
-              </Tooltip>
-            )}
-
             {(() => {
               const actions = effectiveSelectionCount > 0 ? (
                 <TorrentActions
@@ -1187,7 +1172,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       </div>
 
       {/* Table container */}
-      <div className="flex flex-col flex-1 min-h-0 mt-2 sm:mt-0 overflow-hidden">
+      <div className={`flex flex-col flex-1 min-h-0 mt-2 sm:mt-0 overflow-hidden ${effectiveSelectionCount > 0 ? 'pb-20' : ''}`}>
         <div className="relative flex-1 overflow-auto scrollbar-thin" ref={parentRef}>
           <div style={{ position: "relative", minWidth: "min-content" }}>
             {/* Header */}
@@ -1917,6 +1902,83 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Fancy Bottom Calculator Bar */}
+      {effectiveSelectionCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white shadow-2xl border-t border-white/20 z-50 animate-in slide-in-from-bottom-2 duration-300">
+          <div className="max-w-7xl mx-auto px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm border border-white/30 shadow-lg">
+                    <Calculator className="h-5 w-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm">Impact Analysis</div>
+                    <div className="text-xs text-white/80">
+                      {effectiveSelectionCount} torrent{effectiveSelectionCount !== 1 ? 's' : ''} selected
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Stats */}
+                <div className="hidden md:flex items-center gap-6 text-sm">
+                  {(() => {
+                    const selectedTorrents = selectedHashes.map(hash =>
+                      filteredTorrents.find(t => t.hash === hash)
+                    ).filter(Boolean) as EconomyScore[]
+
+                    const duplicates = selectedTorrents.filter(t => t.deduplicationFactor === 0)
+                    const totalSize = selectedTorrents.reduce((sum, t) => sum + t.size, 0)
+                    const totalDuplicateSize = duplicates.reduce((sum, t) => sum + t.size, 0)
+
+                    return (
+                      <>
+                        <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
+                          <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
+                          <span className="font-medium">{duplicates.length} duplicates</span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
+                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                          <span className="font-medium">{formatBytes(totalDuplicateSize)} to save</span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
+                          <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                          <span className="font-medium">{formatBytes(totalSize)} total</span>
+                        </div>
+                      </>
+                    )
+                  })()}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowPreviewDialog(true)}
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 hover:border-white/50 transition-all duration-200 hover:scale-105 shadow-lg"
+                >
+                  <Calculator className="h-4 w-4 mr-2" />
+                  View Analysis
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    // TODO: Implement actual duplicate removal action
+                    toast.success("Duplicate removal action would be performed here")
+                  }}
+                  className="bg-red-500 hover:bg-red-600 transition-all duration-200 hover:scale-105 shadow-lg border border-red-400/50"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remove Duplicates
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 })
