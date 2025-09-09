@@ -826,12 +826,12 @@ func (h *TorrentsHandler) GetEconomyAnalysis(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Apply pagination to review torrents only if pagination parameters were provided
-	if hasPagination && analysis.ReviewTorrents.Torrents != nil {
+	if hasPagination && len(analysis.ReviewTorrents.Torrents) > 0 {
 		// Re-paginate based on request parameters
 		economyService := &qbittorrent.EconomyService{}
 		paginated := economyService.CreatePaginatedReviewTorrents(
-			analysis.ReviewTorrents.Torrents,
-			analysis.ReviewTorrents.Groups,
+			analysis.ReviewTorrents.Torrents, // Full list
+			analysis.ReviewTorrents.Groups,   // Full groups
 			page,
 			pageSize,
 		)

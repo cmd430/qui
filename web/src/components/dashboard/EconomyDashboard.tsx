@@ -550,34 +550,43 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
               </TableRow>
             </TableHeader>
             <TableBody>
-              {torrentGroups.map((group, groupIndex) => (
-                <>
-                  {group.map((torrent) => (
-                    <TableRow
-                      key={torrent.hash}
-                      className={group.length > 1 ? "border-l-4 border-l-blue-200 bg-blue-50/30" : ""}
-                    >
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedTorrents.has(torrent.hash)}
-                          onCheckedChange={(checked: boolean) => handleSelectTorrent(torrent.hash, checked)}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
-                        <div className="flex items-center gap-2">
-                          {torrent.name}
-                          {group.length > 1 && (
-                            <Badge variant="outline" className="text-xs">
-                              Group {groupIndex + 1}
-                            </Badge>
-                          )}
-                          {torrent.deduplicationFactor === 0 && (
-                            <Badge variant="outline" className="text-xs">
-                              Duplicate
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
+              {torrentGroups.map((group, groupIndex) => {
+                // Filter group to only include torrents that are on the current page
+                const pageGroupTorrents = group.filter(torrent =>
+                  currentTorrents.some(pageTorrent => pageTorrent.hash === torrent.hash)
+                )
+
+                // Only render groups that have torrents on this page
+                if (pageGroupTorrents.length === 0) return null
+
+                return (
+                  <>
+                    {pageGroupTorrents.map((torrent) => (
+                      <TableRow
+                        key={torrent.hash}
+                        className={pageGroupTorrents.length > 1 ? "border-l-4 border-l-blue-200 bg-blue-50/30" : ""}
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedTorrents.has(torrent.hash)}
+                            onCheckedChange={(checked: boolean) => handleSelectTorrent(torrent.hash, checked)}
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
+                          <div className="flex items-center gap-2">
+                            {torrent.name}
+                            {pageGroupTorrents.length > 1 && (
+                              <Badge variant="outline" className="text-xs">
+                                Group {groupIndex + 1}
+                              </Badge>
+                            )}
+                            {torrent.deduplicationFactor === 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                Duplicate
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                       <TableCell>{formatBytes(torrent.size)}</TableCell>
                       <TableCell>
                         <Badge variant={torrent.seeds < 5 ? "destructive" : torrent.seeds < 10 ? "secondary" : "default"}>
@@ -676,16 +685,21 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                         </Dialog>
                       </TableCell>
                     </TableRow>
-                  ))}
-                  {groupIndex < torrentGroups.length - 1 && (
-                    <TableRow>
-                      <TableCell colSpan={8} className="py-1">
-                        <div className="border-t border-gray-200"></div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </>
-              ))}
+                    ))}
+                    {groupIndex < torrentGroups.length - 1 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-1">
+                          <div className="border-t border-gray-200"></div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )
+              })}
+            </TableBody>
+                  </>
+                )
+              })}
             </TableBody>
           </Table>
 

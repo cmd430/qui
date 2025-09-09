@@ -94,7 +94,7 @@ type EconomyAnalysis struct {
 	Duplicates          map[string][]string       `json:"duplicates"` // Map of content hash to torrent hashes
 	Optimizations       []OptimizationOpportunity `json:"optimizations"`
 	StorageOptimization StorageOptimization       `json:"storageOptimization"`
-	ReviewTorrents      PaginatedReviewTorrents   `json:"reviewTorrents"`  // Paginated review torrents
+	ReviewTorrents      PaginatedReviewTorrents   `json:"reviewTorrents"`  // Full review torrents and groups
 	ReviewThreshold     float64                   `json:"reviewThreshold"` // Threshold used for review filtering
 }
 
@@ -167,8 +167,19 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	// Create torrent groups
 	torrentGroups := es.createTorrentGroups(reviewTorrents)
 
-	// Create paginated review torrents (default page 1, page size 10)
-	paginatedReviewTorrents := es.CreatePaginatedReviewTorrents(reviewTorrents, torrentGroups, 1, 10)
+	// Create full review torrents data (not paginated)
+	fullReviewTorrents := PaginatedReviewTorrents{
+		Torrents: reviewTorrents,
+		Groups:   torrentGroups,
+		Pagination: PaginationInfo{
+			Page:        1,
+			PageSize:    len(reviewTorrents),
+			TotalItems:  len(reviewTorrents),
+			TotalPages:  1,
+			HasNextPage: false,
+			HasPrevPage: false,
+		},
+	}
 
 	return &EconomyAnalysis{
 		Scores:              scores,
@@ -177,7 +188,7 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 		Duplicates:          duplicates,
 		Optimizations:       optimizations,
 		StorageOptimization: storageOptimization,
-		ReviewTorrents:      paginatedReviewTorrents,
+		ReviewTorrents:      fullReviewTorrents,
 		ReviewThreshold:     reviewThreshold,
 	}, nil
 }
@@ -432,11 +443,19 @@ func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, dupli
 					}
 					// Keep original review priority for the best copy
 				} else {
-					// Other copies get reduced value but not zero
-					score.DeduplicationFactor = 0.3 // Keep 30% of value
-					score.EconomyScore *= 0.3
-					// Increase review priority for duplicates (lower retention priority)
-					score.ReviewPriority = score.EconomyScore * 0.5 // Reduce priority for duplicates
+					// Other copies get reduced value but not zero (keep some value for retention scoring)
+					score.DeduplicationFactor = 0.0 // Mark as duplicate
+					// Keep the retention score for review prioritization but reduce it
+					score.ReviewPriority = score.EconomyScore * 0.3 // Reduce priority for duplicates
+					// Don't change EconomyScore - keep it for retention-based sorting
+
+					// Populate duplicates array for all copies in the group
+					score.Duplicates = make([]string, 0)
+					for _, h := range allHashes {
+						if h != hash { // Don't include self
+							score.Duplicates = append(score.Duplicates, h)
+						}
+					}
 				}
 			}
 		}
@@ -929,7 +948,7 @@ func (es *EconomyService) createTorrentGroups(reviewTorrents []EconomyScore) [][
 }
 
 // CreatePaginatedReviewTorrents creates paginated review torrents with groups
-func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []EconomyScore, groups [][]EconomyScore, page, pageSize int) PaginatedReviewTorrents {
+func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []EconomyScore, allGroups [][]EconomyScore, page, pageSize int) PaginatedReviewTorrents {
 	totalItems := len(reviewTorrents)
 	totalPages := (totalItems + pageSize - 1) / pageSize
 
@@ -951,24 +970,8 @@ func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []Economy
 	// Get the torrents for this page
 	pageTorrents := reviewTorrents[startIndex:endIndex]
 
-	// Filter groups to only include groups that have torrents on this page
-	var pageGroups [][]EconomyScore
-	torrentHashesOnPage := make(map[string]bool)
-	for _, torrent := range pageTorrents {
-		torrentHashesOnPage[torrent.Hash] = true
-	}
-
-	for _, group := range groups {
-		var filteredGroup []EconomyScore
-		for _, torrent := range group {
-			if torrentHashesOnPage[torrent.Hash] {
-				filteredGroup = append(filteredGroup, torrent)
-			}
-		}
-		if len(filteredGroup) > 0 {
-			pageGroups = append(pageGroups, filteredGroup)
-		}
-	}
+	// Create groups for the current page torrents
+	pageGroups := es.createGroupsForPage(pageTorrents, allGroups)
 
 	return PaginatedReviewTorrents{
 		Torrents: pageTorrents,
@@ -982,4 +985,35 @@ func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []Economy
 			HasPrevPage: page > 1,
 		},
 	}
+}
+
+// createGroupsForPage creates groups for the torrents on the current page
+func (es *EconomyService) createGroupsForPage(pageTorrents []EconomyScore, allGroups [][]EconomyScore) [][]EconomyScore {
+	var pageGroups [][]EconomyScore
+	torrentHashesOnPage := make(map[string]bool)
+
+	// Create a map of hashes on this page
+	for _, torrent := range pageTorrents {
+		torrentHashesOnPage[torrent.Hash] = true
+	}
+
+	// Find complete groups that have members on this page
+	for _, group := range allGroups {
+		// Check if this group has any members on the current page
+		hasMembersOnPage := false
+		for _, torrent := range group {
+			if torrentHashesOnPage[torrent.Hash] {
+				hasMembersOnPage = true
+				break
+			}
+		}
+
+		// If the group has members on this page, include the complete group
+		// This ensures groups are shown in full even if some members are on other pages
+		if hasMembersOnPage {
+			pageGroups = append(pageGroups, group)
+		}
+	}
+
+	return pageGroups
 }
