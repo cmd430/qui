@@ -1277,10 +1277,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                         })()}
                         <ContextMenuSeparator />
                         {(() => {
-                          // Use selected torrents if this row is part of selection, or just this torrent
-                          const useSelection = row.getIsSelected() || isAllSelected
-                          const hashes = useSelection ? selectedHashes : [torrent.hash]
-
                           // EconomyScore doesn't have auto_tmm field, so skip this section
                           return null
                         })()}
