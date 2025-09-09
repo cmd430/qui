@@ -20,23 +20,17 @@ import { api } from "@/lib/api"
 interface EconomyDashboardProps {
   analysis: EconomyAnalysis
   instanceId: number
+  onPageChange?: (page: number, pageSize: number) => void
 }
 
-export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps) {
-  const { stats, topValuable, optimizations, storageOptimization, reviewTorrents, torrentGroups } = analysis
+export function EconomyDashboard({ analysis, instanceId, onPageChange }: EconomyDashboardProps) {
+  const { stats, topValuable, optimizations, storageOptimization, reviewTorrents } = analysis
   const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
   const [isRemoving, setIsRemoving] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
 
-  // Use pre-calculated data from backend
-  const lowValueTorrents = reviewTorrents
-
-  // Calculate pagination
-  const totalPages = Math.ceil(lowValueTorrents.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentTorrents = lowValueTorrents.slice(startIndex, endIndex)
+  // Use paginated data from backend
+  const { torrents: currentTorrents, groups: torrentGroups, pagination } = reviewTorrents
+  const { page, pageSize, totalItems, totalPages, hasNextPage, hasPrevPage } = pagination
 
   // Calculate estimated savings for selected torrents
   const calculateEstimatedSavings = () => {
@@ -699,25 +693,25 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
               <div className="text-sm text-muted-foreground">
-                Showing {startIndex + 1}-{Math.min(endIndex, lowValueTorrents.length)} of {lowValueTorrents.length} torrents
+                Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalItems)} of {totalItems} torrents
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => onPageChange?.(page - 1, pageSize)}
+                  disabled={!hasPrevPage}
                 >
                   Previous
                 </Button>
                 <span className="text-sm">
-                  Page {currentPage} of {totalPages}
+                  Page {page} of {totalPages}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => onPageChange?.(page + 1, pageSize)}
+                  disabled={!hasNextPage}
                 >
                   Next
                 </Button>

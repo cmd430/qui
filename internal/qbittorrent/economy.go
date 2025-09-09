@@ -24,11 +24,11 @@ type EconomyScore struct {
 	Peers               int      `json:"peers"`
 	Ratio               float64  `json:"ratio"`
 	Age                 int64    `json:"age"` // Age in days
-	EconomyScore        float64  `json:"economyScore"`
+	EconomyScore        float64  `json:"economyScore"` // Retention-based score (higher = keep longer)
 	StorageValue        float64  `json:"storageValue"`
 	RarityBonus         float64  `json:"rarityBonus"`
 	DeduplicationFactor float64  `json:"deduplicationFactor"`
-	ReviewPriority      float64  `json:"reviewPriority"` // Priority for review (lower = needs more attention)
+	ReviewPriority      float64  `json:"reviewPriority"`       // Priority for review (lower = needs more attention)
 	Duplicates          []string `json:"duplicates,omitempty"` // Hash of duplicate torrents
 	Tracker             string   `json:"tracker"`
 	State               string   `json:"state"`
@@ -69,6 +69,23 @@ type StorageOptimization struct {
 	UnusedContentSavings     int64 `json:"unusedContentSavings"`
 }
 
+// PaginationInfo contains pagination metadata
+type PaginationInfo struct {
+	Page        int  `json:"page"`
+	PageSize    int  `json:"pageSize"`
+	TotalItems  int  `json:"totalItems"`
+	TotalPages  int  `json:"totalPages"`
+	HasNextPage bool `json:"hasNextPage"`
+	HasPrevPage bool `json:"hasPrevPage"`
+}
+
+// PaginatedReviewTorrents contains paginated review torrent data
+type PaginatedReviewTorrents struct {
+	Torrents   []EconomyScore   `json:"torrents"`
+	Groups     [][]EconomyScore `json:"groups"`
+	Pagination PaginationInfo   `json:"pagination"`
+}
+
 // EconomyAnalysis represents the complete economy analysis
 type EconomyAnalysis struct {
 	Scores              []EconomyScore            `json:"scores"`
@@ -77,9 +94,8 @@ type EconomyAnalysis struct {
 	Duplicates          map[string][]string       `json:"duplicates"` // Map of content hash to torrent hashes
 	Optimizations       []OptimizationOpportunity `json:"optimizations"`
 	StorageOptimization StorageOptimization       `json:"storageOptimization"`
-	ReviewTorrents      []EconomyScore            `json:"reviewTorrents"`      // Pre-filtered and sorted torrents needing review
-	ReviewThreshold     float64                   `json:"reviewThreshold"`     // Threshold used for review filtering
-	TorrentGroups       [][]EconomyScore          `json:"torrentGroups"`       // Pre-grouped torrents by duplicates
+	ReviewTorrents      PaginatedReviewTorrents   `json:"reviewTorrents"`  // Paginated review torrents
+	ReviewThreshold     float64                   `json:"reviewThreshold"` // Threshold used for review filtering
 }
 
 // EconomyService handles torrent economy calculations
@@ -151,6 +167,9 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	// Create torrent groups
 	torrentGroups := es.createTorrentGroups(reviewTorrents)
 
+	// Create paginated review torrents (default page 1, page size 10)
+	paginatedReviewTorrents := es.CreatePaginatedReviewTorrents(reviewTorrents, torrentGroups, 1, 10)
+
 	return &EconomyAnalysis{
 		Scores:              scores,
 		Stats:               stats,
@@ -158,9 +177,8 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 		Duplicates:          duplicates,
 		Optimizations:       optimizations,
 		StorageOptimization: storageOptimization,
-		ReviewTorrents:      reviewTorrents,
+		ReviewTorrents:      paginatedReviewTorrents,
 		ReviewThreshold:     reviewThreshold,
-		TorrentGroups:       torrentGroups,
 	}, nil
 }
 
@@ -203,9 +221,14 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 	now := time.Now()
 	addedTime := time.Unix(torrent.AddedOn, 0)
 	ageInDays := int64(now.Sub(addedTime).Hours() / 24)
+	lastActivityTime := time.Unix(torrent.LastActivity, 0)
+	daysSinceActivity := int64(now.Sub(lastActivityTime).Hours() / 24)
 
 	// Base storage value (size in GB)
 	storageValue := float64(torrent.Size) / (1024 * 1024 * 1024)
+
+	// Calculate retention score based on age and other factors
+	retentionScore := es.calculateRetentionScore(torrent, ageInDays, daysSinceActivity)
 
 	// Rarity bonus based on seed count (inverse relationship)
 	var rarityBonus float64
@@ -221,31 +244,8 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 		rarityBonus = 0.1 // Common
 	}
 
-	// Age penalty for well-seeded content (old, well-seeded content is less valuable)
-	agePenalty := 1.0
-	if torrent.NumSeeds > 10 && ageInDays > 30 {
-		// Exponential penalty for old, well-seeded content
-		agePenalty = math.Max(0.1, math.Pow(0.95, float64(ageInDays-30)))
-	}
-
-	// Size bonus (larger files are more valuable to store)
-	sizeBonus := 1.0
-	if storageValue > 10 {
-		sizeBonus = 1.5 // Large files
-	} else if storageValue > 1 {
-		sizeBonus = 1.2 // Medium files
-	}
-
-	// Ratio consideration (completed downloads are more valuable)
-	ratioBonus := 1.0
-	if torrent.Ratio > 1.0 {
-		ratioBonus = 1.1
-	} else if torrent.Ratio < 0.5 {
-		ratioBonus = 0.9
-	}
-
-	// Calculate final economy score
-	economyScore := storageValue * rarityBonus * agePenalty * sizeBonus * ratioBonus
+	// Calculate final economy score (retention-based, higher = keep longer)
+	economyScore := retentionScore
 
 	return EconomyScore{
 		Hash:                torrent.Hash,
@@ -258,13 +258,72 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 		EconomyScore:        economyScore,
 		StorageValue:        storageValue,
 		RarityBonus:         rarityBonus,
-		DeduplicationFactor: 1.0, // Will be updated later
-		ReviewPriority:      economyScore, // Will be updated later with uniqueness factor
+		DeduplicationFactor: 1.0,          // Will be updated later
+		ReviewPriority:      economyScore, // Use economy score for review priority
 		Tracker:             torrent.Tracker,
 		State:               string(torrent.State),
 		Category:            torrent.Category,
 		LastActivity:        torrent.LastActivity,
 	}
+}
+
+// calculateRetentionScore calculates how long content should be retained
+func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays, daysSinceActivity int64) float64 {
+	// Base retention score starts high for new content
+	baseRetention := 100.0
+
+	// Age factor: content loses retention value over time
+	ageFactor := 1.0
+	if ageInDays > 7 {
+		// Gradual decline after 1 week
+		ageFactor = math.Max(0.1, math.Pow(0.98, float64(ageInDays-7)))
+	}
+
+	// Activity factor: recent activity increases retention value
+	activityBonus := 1.0
+	if daysSinceActivity < 1 {
+		activityBonus = 2.0 // Very recent activity
+	} else if daysSinceActivity < 7 {
+		activityBonus = 1.5 // Recent activity
+	} else if daysSinceActivity < 30 {
+		activityBonus = 1.2 // Somewhat recent
+	} else if daysSinceActivity > 90 {
+		activityBonus = 0.5 // Very old activity
+	}
+
+	// Ratio factor: better ratio = higher retention
+	ratioFactor := 1.0
+	if torrent.Ratio > 2.0 {
+		ratioFactor = 1.3 // Excellent ratio
+	} else if torrent.Ratio > 1.0 {
+		ratioFactor = 1.1 // Good ratio
+	} else if torrent.Ratio < 0.3 {
+		ratioFactor = 0.7 // Poor ratio
+	}
+
+	// Category factor: some categories should be retained longer
+	categoryFactor := 1.0
+	category := strings.ToLower(torrent.Category)
+	if strings.Contains(category, "movie") || strings.Contains(category, "tv") {
+		categoryFactor = 1.2 // Entertainment content
+	} else if strings.Contains(category, "music") || strings.Contains(category, "audio") {
+		categoryFactor = 1.1 // Music
+	} else if strings.Contains(category, "book") || strings.Contains(category, "documentary") {
+		categoryFactor = 1.3 // Educational/Documentary
+	}
+
+	// Seed factor: well-seeded content can be retained longer
+	seedFactor := 1.0
+	if torrent.NumSeeds > 10 {
+		seedFactor = 1.2
+	} else if torrent.NumSeeds == 0 {
+		seedFactor = 0.8 // Dead torrents
+	}
+
+	// Calculate final retention score
+	retentionScore := baseRetention * ageFactor * activityBonus * ratioFactor * categoryFactor * seedFactor
+
+	return retentionScore
 }
 
 // findDuplicates finds duplicate content based on name similarity and size
@@ -344,7 +403,7 @@ func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, dupli
 			continue
 		}
 
-		// Find the most valuable copy in this duplicate group
+		// Find the most valuable copy in this duplicate group (based on economy/retention score)
 		bestHash := primaryHash
 		bestScore := primaryScore.EconomyScore
 
@@ -359,7 +418,7 @@ func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, dupli
 			}
 		}
 
-		// Keep the best copy with full value, set others to 0
+		// Keep the best copy with full value, reduce others but don't eliminate
 		for _, hash := range allHashes {
 			if score := scoreMap[hash]; score != nil {
 				if hash == bestHash {
@@ -371,14 +430,13 @@ func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, dupli
 							score.Duplicates = append(score.Duplicates, h)
 						}
 					}
-					// Unique torrents get priority (lower ReviewPriority = higher priority)
-					score.ReviewPriority = score.EconomyScore
+					// Keep original review priority for the best copy
 				} else {
-					// Other copies get zero value (free storage)
-					score.DeduplicationFactor = 0.0
-					score.EconomyScore = 0.0
-					// Duplicates get lower priority (higher ReviewPriority = lower priority)
-					score.ReviewPriority = score.EconomyScore + 1000.0 // Large penalty for duplicates
+					// Other copies get reduced value but not zero
+					score.DeduplicationFactor = 0.3 // Keep 30% of value
+					score.EconomyScore *= 0.3
+					// Increase review priority for duplicates (lower retention priority)
+					score.ReviewPriority = score.EconomyScore * 0.5 // Reduce priority for duplicates
 				}
 			}
 		}
@@ -769,30 +827,30 @@ func (es *EconomyService) formatBytes(bytes int64) string {
 // calculateReviewThreshold calculates the dynamic threshold for torrents needing review
 func (es *EconomyService) calculateReviewThreshold(scores []EconomyScore) float64 {
 	if len(scores) == 0 {
-		return 2.0 // Default fallback
+		return 50.0 // Default fallback for retention scores
 	}
 
-	// Calculate threshold as the 75th percentile of economy scores
-	// This ensures we focus on the worst 25% of torrents
+	// Calculate threshold as the 25th percentile of economy scores
+	// This ensures we focus on the worst 25% of torrents (lowest retention scores)
 	sortedScores := make([]float64, len(scores))
 	for i, score := range scores {
 		sortedScores[i] = score.EconomyScore
 	}
 	sort.Float64s(sortedScores)
 
-	// 75th percentile (top 25% worst scores)
-	thresholdIndex := int(float64(len(sortedScores)) * 0.75)
+	// 25th percentile (bottom 25% lowest retention scores)
+	thresholdIndex := int(float64(len(sortedScores)) * 0.25)
 	if thresholdIndex >= len(sortedScores) {
 		thresholdIndex = len(sortedScores) - 1
 	}
 
 	threshold := sortedScores[thresholdIndex]
 
-	// Ensure threshold is at least 1.0 and at most 5.0
-	if threshold < 1.0 {
-		threshold = 1.0
-	} else if threshold > 5.0 {
-		threshold = 5.0
+	// Ensure threshold is reasonable for retention scores
+	if threshold < 10.0 {
+		threshold = 10.0 // Very low retention
+	} else if threshold > 80.0 {
+		threshold = 80.0 // High retention
 	}
 
 	return threshold
@@ -813,8 +871,8 @@ func (es *EconomyService) buildReviewTorrents(scores []EconomyScore, threshold f
 		if reviewCandidates[i].ReviewPriority != reviewCandidates[j].ReviewPriority {
 			return reviewCandidates[i].ReviewPriority < reviewCandidates[j].ReviewPriority
 		}
-		// Secondary sort: larger files first
-		return reviewCandidates[i].Size > reviewCandidates[j].Size
+		// Secondary sort: oldest content first (higher age = more likely to need review)
+		return reviewCandidates[i].Age > reviewCandidates[j].Age
 	})
 
 	// Remove duplicates from the list (keep only the first occurrence of each hash)
@@ -868,4 +926,60 @@ func (es *EconomyService) createTorrentGroups(reviewTorrents []EconomyScore) [][
 	}
 
 	return groups
+}
+
+// CreatePaginatedReviewTorrents creates paginated review torrents with groups
+func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []EconomyScore, groups [][]EconomyScore, page, pageSize int) PaginatedReviewTorrents {
+	totalItems := len(reviewTorrents)
+	totalPages := (totalItems + pageSize - 1) / pageSize
+
+	// Ensure page is within bounds
+	if page < 1 {
+		page = 1
+	}
+	if page > totalPages && totalPages > 0 {
+		page = totalPages
+	}
+
+	// Calculate start and end indices
+	startIndex := (page - 1) * pageSize
+	endIndex := startIndex + pageSize
+	if endIndex > totalItems {
+		endIndex = totalItems
+	}
+
+	// Get the torrents for this page
+	pageTorrents := reviewTorrents[startIndex:endIndex]
+
+	// Filter groups to only include groups that have torrents on this page
+	var pageGroups [][]EconomyScore
+	torrentHashesOnPage := make(map[string]bool)
+	for _, torrent := range pageTorrents {
+		torrentHashesOnPage[torrent.Hash] = true
+	}
+
+	for _, group := range groups {
+		var filteredGroup []EconomyScore
+		for _, torrent := range group {
+			if torrentHashesOnPage[torrent.Hash] {
+				filteredGroup = append(filteredGroup, torrent)
+			}
+		}
+		if len(filteredGroup) > 0 {
+			pageGroups = append(pageGroups, filteredGroup)
+		}
+	}
+
+	return PaginatedReviewTorrents{
+		Torrents: pageTorrents,
+		Groups:   pageGroups,
+		Pagination: PaginationInfo{
+			Page:        page,
+			PageSize:    pageSize,
+			TotalItems:  totalItems,
+			TotalPages:  totalPages,
+			HasNextPage: page < totalPages,
+			HasPrevPage: page > 1,
+		},
+	}
 }

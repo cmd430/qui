@@ -450,6 +450,21 @@ export interface StorageOptimization {
   unusedContentSavings: number
 }
 
+export interface PaginationInfo {
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPrevPage: boolean
+}
+
+export interface PaginatedReviewTorrents {
+  torrents: EconomyScore[]
+  groups: EconomyScore[][]
+  pagination: PaginationInfo
+}
+
 export interface EconomyAnalysis {
   scores: EconomyScore[]
   stats: EconomyStats
@@ -457,7 +472,6 @@ export interface EconomyAnalysis {
   duplicates: Record<string, string[]>
   optimizations: OptimizationOpportunity[]
   storageOptimization: StorageOptimization
-  reviewTorrents: EconomyScore[]
+  reviewTorrents: PaginatedReviewTorrents
   reviewThreshold: number
-  torrentGroups: EconomyScore[][]
 }

@@ -15,6 +15,8 @@ import { Loader2, TrendingUp, AlertCircle } from "lucide-react"
 
 export function Economy() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   // Get all instances
   const { data: instances, isLoading: instancesLoading } = useQuery({
@@ -22,18 +24,38 @@ export function Economy() {
     queryFn: () => api.getInstances(),
   })
 
-  // Get economy analysis for selected instance
+  // Get economy analysis for selected instance with pagination
   const { data: economyData, isLoading: economyLoading, error } = useQuery({
-    queryKey: ["economy-analysis", selectedInstanceId],
-    queryFn: () => selectedInstanceId ? api.getEconomyAnalysis(selectedInstanceId) : null,
+    queryKey: ["economy-analysis", selectedInstanceId, currentPage, pageSize],
+    queryFn: () => {
+      if (!selectedInstanceId) return null
+      
+      // Only send pagination parameters if they're not default values
+      const pageParam = currentPage !== 1 ? currentPage : undefined
+      const pageSizeParam = pageSize !== 10 ? pageSize : undefined
+      
+      return api.getEconomyAnalysis(selectedInstanceId, pageParam, pageSizeParam)
+    },
     enabled: selectedInstanceId !== null,
     refetchInterval: 30000, // Refresh every 30 seconds
   })
 
+  // Handle page changes
+  const handlePageChange = (page: number, newPageSize: number) => {
+    setCurrentPage(page)
+    setPageSize(newPageSize)
+  }
+
+  // Reset pagination when instance changes
+  const handleInstanceChange = (instanceId: number) => {
+    setSelectedInstanceId(instanceId)
+    setCurrentPage(1) // Reset to first page
+  }
+
   // Auto-select first connected instance
   const connectedInstances = instances?.filter((i: any) => i.connected) || []
   if (selectedInstanceId === null && connectedInstances.length > 0) {
-    setSelectedInstanceId(connectedInstances[0].id)
+    handleInstanceChange(connectedInstances[0].id)
   }
 
   if (instancesLoading) {
@@ -90,7 +112,7 @@ export function Economy() {
         <div className="flex items-center gap-4">
           <Select
             value={selectedInstanceId?.toString() || ""}
-            onValueChange={(value) => setSelectedInstanceId(parseInt(value))}
+            onValueChange={(value) => handleInstanceChange(parseInt(value))}
           >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Select instance" />
@@ -133,7 +155,11 @@ export function Economy() {
               </CardContent>
             </Card>
           ) : economyData ? (
-            <EconomyDashboard analysis={economyData} instanceId={selectedInstanceId} />
+            <EconomyDashboard 
+              analysis={economyData} 
+              instanceId={selectedInstanceId} 
+              onPageChange={handlePageChange}
+            />
           ) : null}
         </>
       )}
