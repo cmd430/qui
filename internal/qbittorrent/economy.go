@@ -127,6 +127,11 @@ func NewEconomyService(syncManager *SyncManager) *EconomyService {
 
 // AnalyzeEconomy performs a complete economy analysis for an instance
 func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*EconomyAnalysis, error) {
+	return es.AnalyzeEconomyWithPagination(ctx, instanceID, 1, 10)
+}
+
+// AnalyzeEconomyWithPagination performs a complete economy analysis for an instance with pagination
+func (es *EconomyService) AnalyzeEconomyWithPagination(ctx context.Context, instanceID int, page, pageSize int) (*EconomyAnalysis, error) {
 	// Get all torrents
 	torrents, err := es.getAllTorrents(ctx, instanceID)
 	if err != nil {
@@ -148,7 +153,7 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	scores := es.calculateEconomyScores(torrents)
 
 	// Find duplicates
-	duplicates := es.findDuplicates(torrents)
+	duplicates := es.findDuplicates(torrents, instanceID)
 
 	// Update scores with deduplication factors
 	scores = es.applyDeduplicationFactors(scores, duplicates)
@@ -185,21 +190,8 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	// Create enhanced torrent groups with metadata
 	enhancedGroups := es.createEnhancedTorrentGroups(reviewTorrents, duplicates)
 
-	// Create full review torrents data (not paginated)
-	fullReviewTorrents := PaginatedReviewTorrents{
-		Torrents:        reviewTorrents,
-		Groups:          torrentGroups,
-		TorrentGroups:   enhancedGroups,
-		GroupingEnabled: len(enhancedGroups) > 0 && len(enhancedGroups) < len(reviewTorrents), // Enable if we have groups with multiple items
-		Pagination: PaginationInfo{
-			Page:        1,
-			PageSize:    len(reviewTorrents),
-			TotalItems:  len(reviewTorrents),
-			TotalPages:  1,
-			HasNextPage: false,
-			HasPrevPage: false,
-		},
-	}
+	// Create paginated review torrents
+	paginatedReviewTorrents := es.CreatePaginatedReviewTorrents(reviewTorrents, torrentGroups, enhancedGroups, page, pageSize)
 
 	return &EconomyAnalysis{
 		Scores:              scores,
@@ -208,7 +200,7 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 		Duplicates:          duplicates,
 		Optimizations:       optimizations,
 		StorageOptimization: storageOptimization,
-		ReviewTorrents:      fullReviewTorrents,
+		ReviewTorrents:      paginatedReviewTorrents,
 		ReviewThreshold:     reviewThreshold,
 	}, nil
 }
@@ -353,42 +345,192 @@ func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays
 	return retentionScore
 }
 
-// findDuplicates finds duplicate content based on name similarity and size
-func (es *EconomyService) findDuplicates(torrents []qbt.Torrent) map[string][]string {
+// findDuplicates finds duplicate content based on name similarity, size matching, and file overlap
+func (es *EconomyService) findDuplicates(torrents []qbt.Torrent, instanceID int) map[string][]string {
 	duplicates := make(map[string][]string)
 
-	// Group by normalized name and size range
+	// Group by normalized name and exact size first
 	contentGroups := make(map[string][]qbt.Torrent)
 
 	for _, torrent := range torrents {
 		// Normalize name for comparison
 		normalizedName := es.normalizeContentName(torrent.Name)
 
-		// Create size bucket (within 10% of size)
-		sizeBucket := int64(float64(torrent.Size) / (1024 * 1024 * 1024) * 10) // GB buckets
-
-		key := fmt.Sprintf("%s_%d", normalizedName, sizeBucket)
+		// Use exact size for duplicate detection - duplicates must have identical sizes
+		key := fmt.Sprintf("%s_%d", normalizedName, torrent.Size)
 		contentGroups[key] = append(contentGroups[key], torrent)
 	}
 
-	// Find groups with multiple torrents
+	// For groups with multiple torrents, check file overlap
 	for _, group := range contentGroups {
 		if len(group) > 1 {
-			hashes := make([]string, len(group))
-			for i, torrent := range group {
-				hashes[i] = torrent.Hash
+			// Get file information for each torrent in the group
+			fileInfos := make(map[string]qbt.TorrentFiles)
+			validTorrents := make([]qbt.Torrent, 0)
+
+			for _, torrent := range group {
+				files, err := es.getTorrentFiles(context.Background(), instanceID, torrent.Hash)
+				if err != nil {
+					log.Warn().Err(err).Str("hash", torrent.Hash).Msg("Failed to get files for torrent, skipping")
+					continue
+				}
+				fileInfos[torrent.Hash] = *files
+				validTorrents = append(validTorrents, torrent)
 			}
 
-			// Use first hash as key
-			duplicates[hashes[0]] = hashes[1:]
+			if len(validTorrents) < 2 {
+				continue
+			}
+
+			// Compare file overlap between all pairs
+			duplicatePairs := es.findFileOverlaps(fileInfos, validTorrents)
+
+			// Build the duplicates map
+			for primaryHash, dupHashes := range duplicatePairs {
+				if existing, exists := duplicates[primaryHash]; exists {
+					// Merge with existing duplicates
+					duplicates[primaryHash] = es.mergeUniqueHashes(existing, dupHashes)
+				} else {
+					duplicates[primaryHash] = dupHashes
+				}
+			}
 		}
 	}
 
 	log.Debug().
 		Int("duplicateGroups", len(duplicates)).
-		Msg("Found duplicate content groups")
+		Msg("Found duplicate content groups based on file overlap")
 
 	return duplicates
+}
+
+// getTorrentFiles gets file information for a specific torrent
+func (es *EconomyService) getTorrentFiles(ctx context.Context, instanceID int, hash string) (*qbt.TorrentFiles, error) {
+	// Get client and sync manager
+	client, _, err := es.syncManager.getClientAndSyncManager(ctx, instanceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	// Get files
+	files, err := client.GetFilesInformationCtx(ctx, hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get torrent files: %w", err)
+	}
+
+	return files, nil
+}
+
+// findFileOverlaps compares file lists between torrents to find actual duplicates
+func (es *EconomyService) findFileOverlaps(fileInfos map[string]qbt.TorrentFiles, torrents []qbt.Torrent) map[string][]string {
+	duplicates := make(map[string][]string)
+
+	if len(torrents) < 2 {
+		return duplicates
+	}
+
+	// Compare each pair of torrents
+	for i := 0; i < len(torrents)-1; i++ {
+		for j := i + 1; j < len(torrents); j++ {
+			torrentA := torrents[i]
+			torrentB := torrents[j]
+
+			filesA, existsA := fileInfos[torrentA.Hash]
+			filesB, existsB := fileInfos[torrentB.Hash]
+
+			if !existsA || !existsB {
+				continue
+			}
+
+			// Check if these torrents have significant file overlap
+			if es.hasSignificantFileOverlap(filesA, filesB) {
+				// Add to duplicates map
+				if _, exists := duplicates[torrentA.Hash]; !exists {
+					duplicates[torrentA.Hash] = []string{}
+				}
+				duplicates[torrentA.Hash] = append(duplicates[torrentA.Hash], torrentB.Hash)
+			}
+		}
+	}
+
+	return duplicates
+}
+
+// hasSignificantFileOverlap checks if two torrent file lists have significant overlap
+func (es *EconomyService) hasSignificantFileOverlap(filesA, filesB qbt.TorrentFiles) bool {
+	if len(filesA) == 0 || len(filesB) == 0 {
+		return false
+	}
+
+	// Create maps for quick lookup
+	fileMapA := make(map[string]int64) // path -> size
+	fileMapB := make(map[string]int64)
+
+	for _, file := range filesA {
+		// Normalize path for comparison (remove leading slashes, normalize separators)
+		normalizedPath := es.normalizeFilePath(file.Name)
+		fileMapA[normalizedPath] = file.Size
+	}
+
+	for _, file := range filesB {
+		normalizedPath := es.normalizeFilePath(file.Name)
+		fileMapB[normalizedPath] = file.Size
+	}
+
+	// Count matching files (same path and size)
+	matchingFiles := 0
+	totalFilesA := len(fileMapA)
+
+	for path, sizeA := range fileMapA {
+		if sizeB, exists := fileMapB[path]; exists && sizeA == sizeB {
+			matchingFiles++
+		}
+	}
+
+	// Consider them duplicates if they have significant overlap
+	// Either: most files match, or if they have the same total file count and most match
+	overlapRatio := float64(matchingFiles) / float64(totalFilesA)
+
+	// Require at least 80% file overlap for single-file torrents, 60% for multi-file
+	minOverlap := 0.8
+	if len(fileMapA) > 1 {
+		minOverlap = 0.6
+	}
+
+	return overlapRatio >= minOverlap
+}
+
+// normalizeFilePath normalizes a file path for comparison
+func (es *EconomyService) normalizeFilePath(path string) string {
+	// Remove leading slashes and normalize separators
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimPrefix(path, "\\")
+	path = strings.ReplaceAll(path, "\\", "/")
+	return strings.ToLower(path)
+}
+
+// mergeUniqueHashes merges two slices of hashes, removing duplicates
+func (es *EconomyService) mergeUniqueHashes(a, b []string) []string {
+	hashSet := make(map[string]bool)
+	result := make([]string, 0)
+
+	// Add all from a
+	for _, hash := range a {
+		if !hashSet[hash] {
+			hashSet[hash] = true
+			result = append(result, hash)
+		}
+	}
+
+	// Add all from b
+	for _, hash := range b {
+		if !hashSet[hash] {
+			hashSet[hash] = true
+			result = append(result, hash)
+		}
+	}
+
+	return result
 }
 
 // normalizeContentName normalizes a torrent name for duplicate detection
@@ -968,17 +1110,17 @@ func (es *EconomyService) calculateReviewThreshold(scores []EconomyScore) float6
 		return 50.0 // Default fallback for retention scores
 	}
 
-	// Calculate threshold as the 40th percentile of economy scores
-	// This ensures we focus on the worst 40% of torrents (lowest retention scores)
-	// With the new scoring, duplicates will have high scores, so this will mainly catch unique torrents
+	// Calculate threshold as the 25th percentile of economy scores
+	// This ensures we focus on the worst 25% of torrents (lowest retention scores)
+	// Reduced from 40% to improve performance and focus on truly problematic torrents
 	sortedScores := make([]float64, len(scores))
 	for i, score := range scores {
 		sortedScores[i] = score.EconomyScore
 	}
 	sort.Float64s(sortedScores)
 
-	// 40th percentile (bottom 40% lowest retention scores)
-	thresholdIndex := int(float64(len(sortedScores)) * 0.40)
+	// 25th percentile (bottom 25% lowest retention scores)
+	thresholdIndex := int(float64(len(sortedScores)) * 0.25)
 	if thresholdIndex >= len(sortedScores) {
 		thresholdIndex = len(sortedScores) - 1
 	}
@@ -986,8 +1128,8 @@ func (es *EconomyService) calculateReviewThreshold(scores []EconomyScore) float6
 	threshold := sortedScores[thresholdIndex]
 
 	// Ensure threshold is reasonable for the new scoring system
-	if threshold < 20.0 {
-		threshold = 20.0 // Low retention for unique torrents
+	if threshold < 15.0 {
+		threshold = 15.0 // Low retention for unique torrents
 	} else if threshold > 100.0 {
 		threshold = 100.0 // High retention (shouldn't happen with new penalties)
 	}
@@ -1003,6 +1145,17 @@ func (es *EconomyService) buildReviewTorrents(scores []EconomyScore, threshold f
 		if score.EconomyScore < threshold {
 			reviewCandidates = append(reviewCandidates, score)
 		}
+	}
+
+	// Limit the number of review candidates to prevent performance issues
+	// Keep only the worst performing torrents (lowest economy scores)
+	maxReviewTorrents := 500 // Hard limit to prevent performance issues
+	if len(reviewCandidates) > maxReviewTorrents {
+		// Sort by economy score (lowest first) and keep only the worst
+		sort.Slice(reviewCandidates, func(i, j int) bool {
+			return reviewCandidates[i].EconomyScore < reviewCandidates[j].EconomyScore
+		})
+		reviewCandidates = reviewCandidates[:maxReviewTorrents]
 	}
 
 	// Sort by review priority (lowest first = highest priority)
@@ -1240,9 +1393,9 @@ func (es *EconomyService) createEnhancedTorrentGroups(reviewTorrents []EconomySc
 	return enhancedGroups
 }
 
-// CreatePaginatedReviewTorrents creates paginated review torrents with groups
-func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []EconomyScore, allGroups [][]EconomyScore, allEnhancedGroups []TorrentGroup, page, pageSize int) PaginatedReviewTorrents {
-	totalItems := len(reviewTorrents)
+// CreatePaginatedReviewTorrents creates a properly paginated PaginatedReviewTorrents structure
+func (es *EconomyService) CreatePaginatedReviewTorrents(allTorrents []EconomyScore, allGroups [][]EconomyScore, allEnhancedGroups []TorrentGroup, page, pageSize int) PaginatedReviewTorrents {
+	totalItems := len(allTorrents)
 	totalPages := (totalItems + pageSize - 1) / pageSize
 
 	// Ensure page is within bounds
@@ -1253,27 +1406,29 @@ func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []Economy
 		page = totalPages
 	}
 
-	// Calculate start and end indices
+	// Calculate start and end indices for the current page
 	startIndex := (page - 1) * pageSize
 	endIndex := startIndex + pageSize
 	if endIndex > totalItems {
 		endIndex = totalItems
 	}
 
-	// Get the torrents for this page
-	pageTorrents := reviewTorrents[startIndex:endIndex]
+	// Get torrents for current page
+	pageTorrents := allTorrents[startIndex:endIndex]
 
-	// Create legacy groups for the current page torrents
+	// Create groups for current page
 	pageGroups := es.createGroupsForPage(pageTorrents, allGroups)
 
-	// Create enhanced groups for the current page
+	// Create enhanced groups for current page
 	pageEnhancedGroups := es.createEnhancedGroupsForPage(pageTorrents, allEnhancedGroups)
 
+	// Determine if grouping should be enabled
+	groupingEnabled := len(pageEnhancedGroups) > 0 && len(pageEnhancedGroups) < len(pageTorrents)
+
 	return PaginatedReviewTorrents{
-		Torrents:        pageTorrents,
-		Groups:          pageGroups,
-		TorrentGroups:   pageEnhancedGroups,
-		GroupingEnabled: len(pageEnhancedGroups) > 0,
+		Torrents:      pageTorrents,
+		Groups:        pageGroups,
+		TorrentGroups: pageEnhancedGroups,
 		Pagination: PaginationInfo{
 			Page:        page,
 			PageSize:    pageSize,
@@ -1282,6 +1437,7 @@ func (es *EconomyService) CreatePaginatedReviewTorrents(reviewTorrents []Economy
 			HasNextPage: page < totalPages,
 			HasPrevPage: page > 1,
 		},
+		GroupingEnabled: groupingEnabled,
 	}
 }
 

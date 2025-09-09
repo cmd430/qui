@@ -1754,7 +1754,12 @@ func (sm *SyncManager) SetTorrentDownloadLimit(ctx context.Context, instanceID i
 
 // GetEconomyAnalysis performs a complete economy analysis for an instance
 func (sm *SyncManager) GetEconomyAnalysis(ctx context.Context, instanceID int) (*EconomyAnalysis, error) {
-	return sm.economyService.AnalyzeEconomy(ctx, instanceID)
+	return sm.GetEconomyAnalysisWithPagination(ctx, instanceID, 1, 25)
+}
+
+// GetEconomyAnalysisWithPagination performs a complete economy analysis for an instance with pagination
+func (sm *SyncManager) GetEconomyAnalysisWithPagination(ctx context.Context, instanceID int, page, pageSize int) (*EconomyAnalysis, error) {
+	return sm.economyService.AnalyzeEconomyWithPagination(ctx, instanceID, page, pageSize)
 }
 
 // GetEconomyStats gets aggregated economy statistics for an instance
@@ -1768,7 +1773,7 @@ func (sm *SyncManager) GetEconomyStats(ctx context.Context, instanceID int) (*Ec
 
 // GetTopValuableTorrents gets the most valuable torrents by economy score
 func (sm *SyncManager) GetTopValuableTorrents(ctx context.Context, instanceID int, limit int) ([]EconomyScore, error) {
-	analysis, err := sm.economyService.AnalyzeEconomy(ctx, instanceID)
+	analysis, err := sm.economyService.AnalyzeEconomyWithPagination(ctx, instanceID, 1, 1000) // Get a large page to ensure we have enough top items
 	if err != nil {
 		return nil, err
 	}

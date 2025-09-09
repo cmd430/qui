@@ -800,43 +800,26 @@ func (h *TorrentsHandler) GetEconomyAnalysis(w http.ResponseWriter, r *http.Requ
 
 	// Parse pagination parameters
 	page := 1
-	pageSize := 10
-	hasPagination := false
+	pageSize := 25 // Increased default for better performance
 
 	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
 			page = p
-			hasPagination = true
 		}
 	}
 
 	if pageSizeStr := r.URL.Query().Get("pageSize"); pageSizeStr != "" {
 		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
 			pageSize = ps
-			hasPagination = true
 		}
 	}
 
 	// Get economy analysis
-	analysis, err := h.syncManager.GetEconomyAnalysis(r.Context(), instanceID)
+	analysis, err := h.syncManager.GetEconomyAnalysisWithPagination(r.Context(), instanceID, page, pageSize)
 	if err != nil {
 		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get economy analysis")
 		RespondError(w, http.StatusInternalServerError, "Failed to get economy analysis")
 		return
-	}
-
-	// Apply pagination to review torrents only if pagination parameters were provided
-	if hasPagination && len(analysis.ReviewTorrents.Torrents) > 0 {
-		// Re-paginate based on request parameters
-		economyService := &qbittorrent.EconomyService{}
-		paginated := economyService.CreatePaginatedReviewTorrents(
-			analysis.ReviewTorrents.Torrents,      // Full list
-			analysis.ReviewTorrents.Groups,        // Full legacy groups
-			analysis.ReviewTorrents.TorrentGroups, // Full enhanced groups
-			page,
-			pageSize,
-		)
-		analysis.ReviewTorrents = paginated
 	}
 
 	RespondJSON(w, http.StatusOK, analysis)
