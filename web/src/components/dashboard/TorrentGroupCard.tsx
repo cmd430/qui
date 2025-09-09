@@ -139,8 +139,8 @@ export function TorrentGroupCard({
               </div>
               <CardDescription className="text-sm">
                 {group.groupType === "last_seed" && (
-                  <span className="text-red-600 font-medium">
-                    ⚠️ We are the only remaining seed - NEVER REMOVE
+                  <span className="text-amber-600 font-medium">
+                    ⚠️ Last remaining seed - removing may lose this content permanently
                   </span>
                 )}
                 {group.groupType === "duplicate" && (
