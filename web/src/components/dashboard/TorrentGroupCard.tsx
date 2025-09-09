@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { formatBytes } from "@/lib/utils"
 import { 
@@ -16,36 +15,30 @@ import {
   Copy, 
   ChevronDown, 
   ChevronRight, 
-  Trash2, 
   Crown,
-  RefreshCw,
   Info,
   Star
 } from "lucide-react"
 import type { TorrentGroup } from "@/types"
 import { useState } from "react"
+import { TorrentActions } from "../torrents/TorrentActions"
 
 interface TorrentGroupCardProps {
   group: TorrentGroup
   selectedTorrents: Set<string>
+  instanceId: number
   onSelectTorrent: (hash: string, checked: boolean) => void
   onSelectGroup: (hashes: string[], checked: boolean) => void
-  onRemoveTorrent: (hash: string) => Promise<void>
-  onRecheckTorrent: (hash: string) => Promise<void>
-  onRemoveGroup: (hashes: string[]) => Promise<void>
 }
 
 export function TorrentGroupCard({
   group,
   selectedTorrents,
+  instanceId,
   onSelectTorrent,
-  onSelectGroup,
-  onRemoveTorrent,
-  onRecheckTorrent,
-  onRemoveGroup
+  onSelectGroup
 }: TorrentGroupCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const [isRemoving, setIsRemoving] = useState(false)
 
   // Check if all torrents in group are selected
   const allSelected = group.torrents.every(torrent => selectedTorrents.has(torrent.hash))
@@ -53,15 +46,6 @@ export function TorrentGroupCard({
   const handleGroupSelect = (checked: boolean) => {
     const hashes = group.torrents.map(t => t.hash)
     onSelectGroup(hashes, checked)
-  }
-
-  const handleRemoveGroup = async () => {
-    setIsRemoving(true)
-    try {
-      await onRemoveGroup(group.torrents.map(t => t.hash))
-    } finally {
-      setIsRemoving(false)
-    }
   }
 
   const getGroupIcon = () => {
@@ -177,32 +161,6 @@ export function TorrentGroupCard({
                 </CollapsibleTrigger>
               </Collapsible>
             )}
-            {group.recommendedAction === "keep_best" && group.torrents.length > 1 && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={isRemoving}>
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Keep Best
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Keep Best Copy</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will remove {group.torrents.length - 1} duplicate copies, keeping only the best one.
-                      You will save {formatBytes(group.potentialSavings)} of storage space.
-                      The best copy is: {group.primaryTorrent.name}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRemoveGroup} className="bg-blue-600 hover:bg-blue-700">
-                      Keep Best Copy
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
           </div>
         </div>
       </CardHeader>
@@ -282,44 +240,6 @@ export function TorrentGroupCard({
                                 </div>
                               </div>
                             </div>
-                            <div className="flex gap-2 pt-4">
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onRecheckTorrent(torrent.hash)}
-                              >
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Recheck
-                              </Button>
-                              {group.groupType !== "last_seed" && (
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm">
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Remove
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                      <AlertDialogTitle>Remove Torrent</AlertDialogTitle>
-                                      <AlertDialogDescription>
-                                        Are you sure you want to remove this torrent?
-                                        This action cannot be undone.
-                                      </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                      <AlertDialogAction
-                                        onClick={() => onRemoveTorrent(torrent.hash)}
-                                        className="bg-red-600 hover:bg-red-700"
-                                      >
-                                        Remove
-                                      </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                  </AlertDialogContent>
-                                </AlertDialog>
-                              )}
-                            </div>
                           </DialogContent>
                         </Dialog>
                       </div>
@@ -394,44 +314,6 @@ export function TorrentGroupCard({
                         </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2 pt-4">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => onRecheckTorrent(group.primaryTorrent.hash)}
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Recheck
-                    </Button>
-                    {group.groupType !== "last_seed" && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Remove
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Remove Torrent</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to remove this torrent?
-                              This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => onRemoveTorrent(group.primaryTorrent.hash)}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              Remove
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
                   </div>
                 </DialogContent>
               </Dialog>

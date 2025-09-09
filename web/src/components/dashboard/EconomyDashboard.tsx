@@ -14,8 +14,8 @@ import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
 import type { EconomyAnalysis, TorrentGroup } from "@/types"
 import { useState } from "react"
-import { api } from "@/lib/api"
 import { TorrentGroupCard } from "./TorrentGroupCard"
+import { TorrentActions } from "../torrents/TorrentActions"
 
 interface EconomyDashboardProps {
   analysis: EconomyAnalysis
@@ -59,66 +59,6 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
         currentHashes.forEach((hash: string) => newSet.delete(hash))
         return newSet
       })
-    }
-  }
-
-  const handleRemoveTorrent = async (hash: string) => {
-    try {
-      await api.bulkAction(instanceId, {
-        hashes: [hash],
-        action: "delete",
-        deleteFiles: false,
-      })
-      // Could add a success notification here
-    } catch (error) {
-      console.error('Failed to remove torrent:', error)
-    }
-  }
-
-  const handleSelectGroup = async (hashes: string[], checked: boolean) => {
-    if (checked) {
-      setSelectedTorrents((prev: Set<string>) => new Set([...prev, ...hashes]))
-    } else {
-      setSelectedTorrents((prev: Set<string>) => {
-        const newSet = new Set(prev)
-        hashes.forEach((hash: string) => newSet.delete(hash))
-        return newSet
-      })
-    }
-  }
-
-  const handleRecheckTorrent = async (hash: string) => {
-    try {
-      await api.bulkAction(instanceId, {
-        hashes: [hash],
-        action: "recheck",
-      })
-      // Could add a success notification here
-    } catch (error) {
-      console.error('Failed to recheck torrent:', error)
-    }
-  }
-
-  const handleRemoveGroup = async (hashes: string[]) => {
-    try {
-      await api.bulkAction(instanceId, {
-        hashes,
-        action: "delete",
-        deleteFiles: false,
-      })
-      
-      // Clear selection for removed torrents
-      setSelectedTorrents((prev: Set<string>) => {
-        const newSet = new Set(prev)
-        hashes.forEach((hash: string) => newSet.delete(hash))
-        return newSet
-      })
-      
-      // You would also need to refresh the analysis data here
-      // This would typically trigger a refetch of the economy data
-      
-    } catch (error) {
-      console.error('Failed to remove torrent group:', error)
     }
   }
 
@@ -503,17 +443,30 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                   <TorrentGroupCard
                     group={group}
                     selectedTorrents={selectedTorrents}
+                    instanceId={instanceId}
                     onSelectTorrent={handleSelectTorrent}
                     onSelectGroup={handleSelectGroup}
-                    onRemoveTorrent={handleRemoveTorrent}
-                    onRecheckTorrent={handleRecheckTorrent}
-                    onRemoveGroup={handleRemoveGroup}
                   />
                 ))}
             </div>
           ) : (
             // List view using table
             <>
+              {/* Torrent Actions */}
+              {selectedTorrents.size > 0 && (
+                <div className="flex justify-between items-center mb-4">
+                  <div className="text-sm text-muted-foreground">
+                    {selectedTorrents.size} torrent{selectedTorrents.size !== 1 ? 's' : ''} selected
+                  </div>
+                  <TorrentActions
+                    instanceId={instanceId}
+                    selectedHashes={Array.from(selectedTorrents)}
+                    selectedTorrents={currentTorrents.filter(t => selectedTorrents.has(t.hash))}
+                    onComplete={() => setSelectedTorrents(new Set())}
+                  />
+                </div>
+              )}
+
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -532,7 +485,6 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                     <TableHead>Age (days)</TableHead>
                     <TableHead>Economy Score</TableHead>
                     <TableHead>Ratio</TableHead>
-                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -572,84 +524,6 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                         <span className={torrent.ratio < 0.5 ? "text-red-500" : torrent.ratio < 1.0 ? "text-yellow-500" : "text-green-500"}>
                           {torrent.ratio.toFixed(2)}
                         </span>
-                      </TableCell>
-                      <TableCell>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm">
-                              Review
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-2xl">
-                            <DialogHeader>
-                              <DialogTitle>Review Torrent: {torrent.name}</DialogTitle>
-                              <DialogDescription>
-                                Detailed analysis of this torrent's economy metrics
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <h4 className="font-semibold">Torrent Details</h4>
-                                  <div className="text-sm space-y-1">
-                                    <div><strong>Size:</strong> {formatBytes(torrent.size)}</div>
-                                    <div><strong>Seeds:</strong> {torrent.seeds}</div>
-                                    <div><strong>Peers:</strong> {torrent.peers}</div>
-                                    <div><strong>Age:</strong> {torrent.age} days</div>
-                                    <div><strong>Ratio:</strong> {torrent.ratio.toFixed(2)}</div>
-                                    <div><strong>State:</strong> {torrent.state}</div>
-                                    <div><strong>Category:</strong> {torrent.category}</div>
-                                  </div>
-                                </div>
-                                <div className="space-y-2">
-                                  <h4 className="font-semibold">Economy Analysis</h4>
-                                  <div className="text-sm space-y-1">
-                                    <div><strong>Economy Score:</strong> {torrent.economyScore.toFixed(2)}</div>
-                                    <div><strong>Storage Value:</strong> {torrent.storageValue.toFixed(2)} GB</div>
-                                    <div><strong>Rarity Bonus:</strong> {torrent.rarityBonus.toFixed(1)}x</div>
-                                    <div><strong>Deduplication Factor:</strong> {torrent.deduplicationFactor.toFixed(2)}</div>
-                                  </div>
-                                  <div className="pt-2">
-                                    <h5 className="font-medium text-sm mb-1">Recommendations:</h5>
-                                    <div className="text-xs space-y-1">
-                                      {torrent.economyScore < 1.0 && (
-                                        <div className="text-red-600">• Low value - consider removal</div>
-                                      )}
-                                      {torrent.ratio < 0.5 && (
-                                        <div className="text-yellow-600">• Poor ratio - may need reseeding</div>
-                                      )}
-                                      {torrent.seeds < 5 && torrent.age > 30 && (
-                                        <div className="text-orange-600">• Rare but old - evaluate retention</div>
-                                      )}
-                                      {torrent.seeds > 10 && torrent.age > 90 && (
-                                        <div className="text-blue-600">• Well-seeded old content - potential cleanup</div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 pt-4">
-                                <Button variant="outline" size="sm">
-                                  Keep Torrent
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleRemoveTorrent(torrent.hash)}
-                                >
-                                  Remove Torrent
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handleRecheckTorrent(torrent.hash)}
-                                >
-                                  Recheck Ratio
-                                </Button>
-                              </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
                       </TableCell>
                     </TableRow>
                   ))}
