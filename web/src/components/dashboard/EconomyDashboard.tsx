@@ -994,6 +994,77 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
   return (
     <div className="h-full flex flex-col">
+      {/* Top Calculator - Always Visible */}
+      <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/50 dark:to-purple-950/50 border-b border-border/50 p-4 mb-4 rounded-lg shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg border border-blue-200 dark:border-blue-800">
+                <Calculator className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <div className="font-semibold text-sm text-foreground">Storage Calculator</div>
+                <div className="text-xs text-muted-foreground">
+                  {filteredTorrents.length} torrent{filteredTorrents.length !== 1 ? 's' : ''} • {formatBytes(analysis.stats.totalStorage)} total storage
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="hidden md:flex items-center gap-6 text-sm">
+              <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 px-3 py-1.5 rounded-md border border-green-200 dark:border-green-800">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="font-medium text-green-700 dark:text-green-300">
+                  {formatBytes(analysis.stats.storageSavings)} savings
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 px-3 py-1.5 rounded-md border border-blue-200 dark:border-blue-800">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="font-medium text-blue-700 dark:text-blue-300">
+                  {analysis.stats.highValueTorrents} high value
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-orange-100 dark:bg-orange-900/30 px-3 py-1.5 rounded-md border border-orange-200 dark:border-orange-800">
+                <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                <span className="font-medium text-orange-700 dark:text-orange-300">
+                  {analysis.stats.rareContentCount} rare
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {effectiveSelectionCount > 0 && (
+              <>
+                <div className="text-sm text-muted-foreground border-r pr-3 mr-3">
+                  {effectiveSelectionCount} selected
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPreviewDialog(true)}
+                  className="border-blue-200 hover:bg-blue-50 dark:border-blue-800 dark:hover:bg-blue-950/50"
+                >
+                  <Calculator className="h-4 w-4 mr-2" />
+                  View Analysis
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    // TODO: Implement actual duplicate removal action
+                    toast.success("Duplicate removal action would be performed here")
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Remove Duplicates
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Search and Actions */}
       <div className="flex flex-col gap-2 flex-shrink-0">
         {/* Search bar row */}
@@ -1860,83 +1931,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span className="text-sm">Loading more torrents...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Fancy Bottom Calculator Bar */}
-      {effectiveSelectionCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-800 text-white shadow-2xl border-t border-white/20 z-50 animate-in slide-in-from-bottom-2 duration-300">
-          <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm border border-white/30 shadow-lg">
-                    <Calculator className="h-5 w-5 animate-pulse" />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-sm">Impact Analysis</div>
-                    <div className="text-xs text-white/80">
-                      {effectiveSelectionCount} torrent{effectiveSelectionCount !== 1 ? 's' : ''} selected
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Stats */}
-                <div className="hidden md:flex items-center gap-6 text-sm">
-                  {(() => {
-                    const selectedTorrents = selectedHashes.map(hash =>
-                      sortedTorrents.find(t => t.hash === hash)
-                    ).filter(Boolean) as EconomyScore[]
-
-                    const duplicates = selectedTorrents.filter(t => t.deduplicationFactor === 0)
-                    const totalSize = selectedTorrents.reduce((sum, t) => sum + t.size, 0)
-                    const actualStorageSavings = selectedTorrents.reduce((sum, t) => sum + (t.storageValue * (1 - t.deduplicationFactor)), 0)
-
-                    return (
-                      <>
-                        <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
-                          <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse"></div>
-                          <span className="font-medium">{duplicates.length} duplicates</span>
-                        </div>
-                        <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
-                          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                          <span className="font-medium">{formatBytes(actualStorageSavings)} to save</span>
-                        </div>
-                        <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-md">
-                          <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
-                          <span className="font-medium">{formatBytes(totalSize)} total</span>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowPreviewDialog(true)}
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 hover:border-white/50 transition-all duration-200 hover:scale-105 shadow-lg"
-                >
-                  <Calculator className="h-4 w-4 mr-2" />
-                  View Analysis
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    // TODO: Implement actual duplicate removal action
-                    toast.success("Duplicate removal action would be performed here")
-                  }}
-                  className="bg-red-500 hover:bg-red-600 transition-all duration-200 hover:scale-105 shadow-lg border border-red-400/50"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Remove Duplicates
-                </Button>
-              </div>
-            </div>
           </div>
         </div>
       )}
