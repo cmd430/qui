@@ -20,8 +20,8 @@ type EconomyScore struct {
 	Hash                string   `json:"hash"`
 	Name                string   `json:"name"`
 	Size                int64    `json:"size"`
-	Seeds               int      `json:"seeds"`
-	Peers               int      `json:"peers"`
+	Seeds               int      `json:"seeds"`         // Total seeds from tracker
+	Peers               int      `json:"peers"`         // Total peers from tracker
 	Ratio               float64  `json:"ratio"`
 	Age                 int64    `json:"age"`          // Age in days
 	EconomyScore        float64  `json:"economyScore"` // Retention-based score (higher = keep longer)
@@ -166,37 +166,37 @@ func findBestCopyInGroup(hashes []string, scoreMap map[string]*EconomyScore) str
 	return bestHash
 }
 
-// calculateRarityBonus calculates rarity bonus based on seed count
-func calculateRarityBonus(seeds int) float64 {
+// calculateRarityBonus calculates rarity bonus based on total seed count from tracker
+func calculateRarityBonus(totalSeeds int) float64 {
 	switch {
-	case seeds == 0:
+	case totalSeeds == 0:
 		return 10.0 // Extremely rare
-	case seeds < 5:
+	case totalSeeds < 5:
 		return 5.0 // Very rare
-	case seeds < 10:
+	case totalSeeds < 10:
 		return 2.0 // Rare
-	case seeds < 50:
+	case totalSeeds < 50:
 		return 1.0 // Moderately rare
 	default:
 		return 0.1 // Common
 	}
 }
 
-// calculateSeedFactor calculates seed factor based on duplicate status and other factors
-func calculateSeedFactor(seeds int, age int64, isDuplicate bool) float64 {
+// calculateSeedFactor calculates seed factor based on total seed count from tracker and other factors
+func calculateSeedFactor(totalSeeds int, age int64, isDuplicate bool) float64 {
 	if isDuplicate {
-		if seeds == 0 {
+		if totalSeeds == 0 {
 			return 1.5 // Extra bonus for being the last seed of duplicate content
 		}
 		return 1.0 // All live duplicates are equally valuable
 	}
 
 	// For unique torrents
-	if seeds == 0 {
+	if totalSeeds == 0 {
 		return 3.0 // Major bonus for being the sole remaining seed
 	}
 
-	if seeds > 10 {
+	if totalSeeds > 10 {
 		// Well-seeded unique torrents get penalized (especially old ones)
 		if age > 30 {
 			return 0.3 // Heavy penalty for old well-seeded unique content
@@ -206,7 +206,7 @@ func calculateSeedFactor(seeds int, age int64, isDuplicate bool) float64 {
 		return 0.8 // Light penalty for new well-seeded unique content
 	}
 
-	if seeds > 5 {
+	if totalSeeds > 5 {
 		// Moderately seeded unique torrents get some penalty
 		if age > 30 {
 			return 0.5
@@ -354,15 +354,15 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 	// Calculate retention score based on age and other factors
 	retentionScore := es.calculateRetentionScore(torrent, ageInDays, daysSinceActivity)
 
-	// Calculate rarity bonus
-	rarityBonus := calculateRarityBonus(int(torrent.NumSeeds))
+	// Calculate rarity bonus based on total seeds from tracker
+	rarityBonus := calculateRarityBonus(int(torrent.NumComplete))
 
 	return EconomyScore{
 		Hash:                torrent.Hash,
 		Name:                torrent.Name,
 		Size:                torrent.Size,
-		Seeds:               int(torrent.NumSeeds),
-		Peers:               int(torrent.NumLeechs),
+		Seeds:               int(torrent.NumComplete),  // Total seeds from tracker
+		Peers:               int(torrent.NumIncomplete), // Total peers from tracker
 		Ratio:               torrent.Ratio,
 		Age:                 ageInDays,
 		EconomyScore:        retentionScore,
