@@ -830,8 +830,9 @@ func (h *TorrentsHandler) GetEconomyAnalysis(w http.ResponseWriter, r *http.Requ
 		// Re-paginate based on request parameters
 		economyService := &qbittorrent.EconomyService{}
 		paginated := economyService.CreatePaginatedReviewTorrents(
-			analysis.ReviewTorrents.Torrents, // Full list
-			analysis.ReviewTorrents.Groups,   // Full groups
+			analysis.ReviewTorrents.Torrents,      // Full list
+			analysis.ReviewTorrents.Groups,        // Full legacy groups
+			analysis.ReviewTorrents.TorrentGroups, // Full enhanced groups
 			page,
 			pageSize,
 		)

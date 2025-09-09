@@ -459,9 +459,23 @@ export interface PaginationInfo {
   hasPrevPage: boolean
 }
 
+export interface TorrentGroup {
+  id: string
+  torrents: EconomyScore[]
+  primaryTorrent: EconomyScore
+  groupType: "duplicate" | "unique" | "last_seed"
+  totalSize: number
+  deduplicatedSize: number
+  potentialSavings: number
+  recommendedAction: "keep_all" | "keep_best" | "preserve" | "review"
+  priority: number
+}
+
 export interface PaginatedReviewTorrents {
   torrents: EconomyScore[]
   groups: EconomyScore[][]
+  torrentGroups: TorrentGroup[]
+  groupingEnabled: boolean
   pagination: PaginationInfo
 }
 
