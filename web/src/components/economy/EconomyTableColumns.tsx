@@ -12,8 +12,8 @@ import type { EconomyScore } from "@/types"
 import type { Column, ColumnDef } from "@tanstack/react-table"
 import { AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Package, TrendingUp } from "lucide-react"
 
-// Helper to create sortable header
-const SortableHeader = ({ column, children }: { column: Column<EconomyScore>; children: React.ReactNode }) => {
+// Helper to create sortable header - defined inside the column factory to avoid export issues
+function createSortableHeader(column: Column<EconomyScore>, children: React.ReactNode) {
   return (
     <Button
       variant="ghost"
@@ -95,7 +95,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "name",
-    header: ({ column }) => <SortableHeader column={column}>Name</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Name"),
     cell: ({ row }) => {
       const name = row.original.name
       const isDuplicate = row.original.duplicates && row.original.duplicates.length > 0
@@ -122,7 +122,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "size",
-    header: ({ column }) => <SortableHeader column={column}>Size</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Size"),
     cell: ({ row }) => (
       <span className="font-mono text-sm">{formatBytes(row.getValue("size"))}</span>
     ),
@@ -130,7 +130,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "economyScore",
-    header: ({ column }) => <SortableHeader column={column}>Score</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Score"),
     cell: ({ row }) => {
       const score = row.getValue("economyScore") as number
       return (
@@ -146,7 +146,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "seeds",
-    header: ({ column }) => <SortableHeader column={column}>Seeds</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Seeds"),
     cell: ({ row }) => {
       const seeds = row.getValue("seeds") as number
       const peers = row.original.peers
@@ -164,7 +164,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "ratio",
-    header: ({ column }) => <SortableHeader column={column}>Ratio</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Ratio"),
     cell: ({ row }) => {
       const ratio = row.getValue("ratio") as number
       return (
@@ -182,7 +182,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "age",
-    header: ({ column }) => <SortableHeader column={column}>Age</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Age"),
     cell: ({ row }) => {
       const age = row.getValue("age") as number
       return <span className="text-sm">{formatAge(age)}</span>
@@ -191,7 +191,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "storageValue",
-    header: ({ column }) => <SortableHeader column={column}>Storage Value</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Storage Value"),
     cell: ({ row }) => {
       const value = row.getValue("storageValue") as number
       return <span className="font-mono text-sm">{value.toFixed(2)} GB</span>
@@ -200,7 +200,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "rarityBonus",
-    header: ({ column }) => <SortableHeader column={column}>Rarity</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Rarity"),
     cell: ({ row }) => {
       const bonus = row.getValue("rarityBonus") as number
       let icon = null
@@ -228,7 +228,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "reviewPriority",
-    header: ({ column }) => <SortableHeader column={column}>Priority</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Priority"),
     cell: ({ row }) => {
       const priority = row.getValue("reviewPriority") as number
       const color = priority < 30 ? "text-red-500" : priority < 50 ? "text-orange-500" : ""
@@ -242,7 +242,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "state",
-    header: ({ column }) => <SortableHeader column={column}>State</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "State"),
     cell: ({ row }) => {
       const state = row.getValue("state") as string
       return (
@@ -255,7 +255,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "category",
-    header: ({ column }) => <SortableHeader column={column}>Category</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Category"),
     cell: ({ row }) => {
       const category = row.getValue("category") as string
       return category ? (
@@ -270,7 +270,7 @@ export const createEconomyColumns = (): ColumnDef<EconomyScore>[] => [
   },
   {
     accessorKey: "tracker",
-    header: ({ column }) => <SortableHeader column={column}>Tracker</SortableHeader>,
+    header: ({ column }) => createSortableHeader(column, "Tracker"),
     cell: ({ row }) => {
       const tracker = row.getValue("tracker") as string
       // Extract domain from tracker URL

@@ -7,11 +7,12 @@ import { useState, useCallback } from "react"
 import { EconomyTable } from "@/components/economy/EconomyTable"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useInstances } from "@/hooks/useInstances"
 import { formatBytes } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
-import { Loader2, TrendingDown, TrendingUp, HardDrive, Package } from "lucide-react"
+import { Loader2, TrendingDown, TrendingUp, HardDrive, Package, Info } from "lucide-react"
 import type { FilterOptions } from "@/types"
 
 export function Economy() {
@@ -148,12 +149,21 @@ export function Economy() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    {stats.totalTorrents} torrents
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Current disk usage across all torrents
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {stats.totalTorrents} torrents
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-muted-foreground/50 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">
+                          Combined size of all torrents currently in your library, including duplicates
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -166,12 +176,21 @@ export function Economy() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    From {stats.totalTorrents - stats.rareContentCount} duplicates
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Space saved by removing duplicate files
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      From {stats.totalTorrents - stats.rareContentCount} duplicates
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-muted-foreground/50 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">
+                          Potential space that could be freed by removing duplicate copies while keeping the best version of each torrent based on economy score
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -184,12 +203,21 @@ export function Economy() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    Retention value (0-100)
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Higher scores = keep longer
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Retention value (0-100)
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-muted-foreground/50 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">
+                          Score based on age, activity, ratio, and rarity. Higher scores indicate torrents worth keeping longer. Duplicates get bonus points, while old well-seeded content scores lower.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -202,12 +230,21 @@ export function Economy() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-xs text-muted-foreground">
-                    Torrents with &lt;5 seeds
-                  </p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">
-                    Critical to preserve for availability
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Torrents with &lt;5 seeds
+                    </p>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-3 w-3 text-muted-foreground/50 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <p className="text-xs">
+                          Content at risk of becoming permanently unavailable. These torrents are critical to preserve as you may be one of the only remaining seeders.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </CardContent>
               </Card>
             </div>
