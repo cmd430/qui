@@ -416,6 +416,7 @@ export interface EconomyScore {
   tracker: string
   state: string
   category: string
+  lastActivity: number
 }
 
 export interface EconomyStats {
@@ -429,9 +430,30 @@ export interface EconomyStats {
   wellSeededOldContent: number
 }
 
+export interface OptimizationOpportunity {
+  type: string
+  title: string
+  description: string
+  priority: "high" | "medium" | "low"
+  savings: number
+  impact: number
+  torrents: string[]
+  category: "storage" | "seeding" | "ratio"
+}
+
+export interface StorageOptimization {
+  totalPotentialSavings: number
+  deduplicationSavings: number
+  oldContentCleanupSavings: number
+  ratioOptimizationSavings: number
+  unusedContentSavings: number
+}
+
 export interface EconomyAnalysis {
   scores: EconomyScore[]
   stats: EconomyStats
   topValuable: EconomyScore[]
   duplicates: Record<string, string[]>
+  optimizations: OptimizationOpportunity[]
+  storageOptimization: StorageOptimization
 }

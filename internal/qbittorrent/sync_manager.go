@@ -60,7 +60,7 @@ type TorrentStats struct {
 
 // SyncManager manages torrent operations
 type SyncManager struct {
-	clientPool    *ClientPool
+	clientPool     *ClientPool
 	economyService *EconomyService
 }
 

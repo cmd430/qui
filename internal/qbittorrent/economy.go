@@ -32,6 +32,7 @@ type EconomyScore struct {
 	Tracker             string    `json:"tracker"`
 	State               string    `json:"state"`
 	Category            string    `json:"category"`
+	LastActivity        int64     `json:"lastActivity"`
 }
 
 // EconomyStats represents aggregated economy statistics
@@ -46,12 +47,35 @@ type EconomyStats struct {
 	WellSeededOldContent  int     `json:"wellSeededOldContent"`
 }
 
+// OptimizationOpportunity represents a specific optimization opportunity
+type OptimizationOpportunity struct {
+	Type        string  `json:"type"`        // "duplicate_removal", "old_content_cleanup", "ratio_optimization", etc.
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Priority    string  `json:"priority"`    // "high", "medium", "low"
+	Savings     int64   `json:"savings"`     // Storage savings in bytes
+	Impact      float64 `json:"impact"`      // Impact score (0-100)
+	Torrents    []string `json:"torrents"`   // Affected torrent hashes
+	Category    string  `json:"category"`    // "storage", "seeding", "ratio"
+}
+
+// StorageOptimization represents storage-related optimization data
+type StorageOptimization struct {
+	TotalPotentialSavings    int64 `json:"totalPotentialSavings"`
+	DeduplicationSavings     int64 `json:"deduplicationSavings"`
+	OldContentCleanupSavings int64 `json:"oldContentCleanupSavings"`
+	RatioOptimizationSavings int64 `json:"ratioOptimizationSavings"`
+	UnusedContentSavings     int64 `json:"unusedContentSavings"`
+}
+
 // EconomyAnalysis represents the complete economy analysis
 type EconomyAnalysis struct {
-	Scores      []EconomyScore `json:"scores"`
-	Stats       EconomyStats   `json:"stats"`
-	TopValuable []EconomyScore `json:"topValuable"`
-	Duplicates  map[string][]string `json:"duplicates"` // Map of content hash to torrent hashes
+	Scores           []EconomyScore           `json:"scores"`
+	Stats            EconomyStats             `json:"stats"`
+	TopValuable      []EconomyScore           `json:"topValuable"`
+	Duplicates       map[string][]string      `json:"duplicates"` // Map of content hash to torrent hashes
+	Optimizations    []OptimizationOpportunity `json:"optimizations"`
+	StorageOptimization StorageOptimization   `json:"storageOptimization"`
 }
 
 // EconomyService handles torrent economy calculations
@@ -76,10 +100,12 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 
 	if len(torrents) == 0 {
 		return &EconomyAnalysis{
-			Scores:      []EconomyScore{},
-			Stats:       EconomyStats{},
-			TopValuable: []EconomyScore{},
-			Duplicates:  make(map[string][]string),
+			Scores:              []EconomyScore{},
+			Stats:               EconomyStats{},
+			TopValuable:         []EconomyScore{},
+			Duplicates:          make(map[string][]string),
+			Optimizations:       []OptimizationOpportunity{},
+			StorageOptimization: StorageOptimization{},
 		}, nil
 	}
 
@@ -100,6 +126,12 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	// Calculate statistics
 	stats := es.calculateStats(scores, duplicates)
 
+	// Calculate optimization opportunities
+	optimizations := es.calculateOptimizationOpportunities(scores, duplicates)
+
+	// Calculate storage optimization data
+	storageOptimization := es.calculateStorageOptimization(scores, duplicates)
+
 	// Get top valuable torrents
 	topValuable := scores
 	if len(topValuable) > 20 {
@@ -107,10 +139,12 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	}
 
 	return &EconomyAnalysis{
-		Scores:      scores,
-		Stats:       stats,
-		TopValuable: topValuable,
-		Duplicates:  duplicates,
+		Scores:              scores,
+		Stats:               stats,
+		TopValuable:         topValuable,
+		Duplicates:          duplicates,
+		Optimizations:       optimizations,
+		StorageOptimization: storageOptimization,
 	}, nil
 }
 
@@ -212,6 +246,7 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 		Tracker:             torrent.Tracker,
 		State:               string(torrent.State),
 		Category:            torrent.Category,
+		LastActivity:        torrent.LastActivity,
 	}
 }
 
@@ -366,4 +401,213 @@ func (es *EconomyService) calculateStats(scores []EconomyScore, duplicates map[s
 		RareContentCount:     rareContentCount,
 		WellSeededOldContent: wellSeededOldCount,
 	}
+}
+
+// calculateOptimizationOpportunities identifies specific optimization opportunities
+func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomyScore, duplicates map[string][]string) []OptimizationOpportunity {
+	var opportunities []OptimizationOpportunity
+
+	// 1. Duplicate removal opportunities
+	if len(duplicates) > 0 {
+		var duplicateHashes []string
+		var totalDuplicateSize int64
+
+		for primaryHash, dupHashes := range duplicates {
+			duplicateHashes = append(duplicateHashes, primaryHash)
+			duplicateHashes = append(duplicateHashes, dupHashes...)
+
+			// Find the primary score to get size
+			for _, score := range scores {
+				if score.Hash == primaryHash {
+					totalDuplicateSize += score.Size
+					break
+				}
+			}
+		}
+
+		// Calculate potential savings (keep one copy of each duplicate group)
+		savings := int64(float64(totalDuplicateSize) * 0.7) // Assume 70% of duplicate content can be removed
+
+		opportunities = append(opportunities, OptimizationOpportunity{
+			Type:        "duplicate_removal",
+			Title:       "Remove Duplicate Content",
+			Description: fmt.Sprintf("Remove %d duplicate torrents to save %s of storage", len(duplicateHashes)-len(duplicates), es.formatBytes(savings)),
+			Priority:    "high",
+			Savings:     savings,
+			Impact:      85.0,
+			Torrents:    duplicateHashes,
+			Category:    "storage",
+		})
+	}
+
+	// 2. Old well-seeded content cleanup
+	var oldWellSeededHashes []string
+	var oldWellSeededSize int64
+
+	for _, score := range scores {
+		if score.Seeds > 10 && score.Age > 90 && score.EconomyScore < 2.0 { // Low value, old, well-seeded
+			oldWellSeededHashes = append(oldWellSeededHashes, score.Hash)
+			oldWellSeededSize += score.Size
+		}
+	}
+
+	if len(oldWellSeededHashes) > 0 {
+		savings := int64(float64(oldWellSeededSize) * 0.8) // Assume 80% can be cleaned up
+		opportunities = append(opportunities, OptimizationOpportunity{
+			Type:        "old_content_cleanup",
+			Title:       "Clean Up Old Well-Seeded Content",
+			Description: fmt.Sprintf("Remove %d old, well-seeded torrents that are no longer providing value", len(oldWellSeededHashes)),
+			Priority:    "medium",
+			Savings:     savings,
+			Impact:      65.0,
+			Torrents:    oldWellSeededHashes,
+			Category:    "storage",
+		})
+	}
+
+	// 3. Ratio optimization opportunities
+	var lowRatioHashes []string
+	var lowRatioSize int64
+
+	for _, score := range scores {
+		if score.Ratio < 0.5 && score.State == "seeding" && score.Age > 7 { // Low ratio, actively seeding, not brand new
+			lowRatioHashes = append(lowRatioHashes, score.Hash)
+			lowRatioSize += score.Size
+		}
+	}
+
+	if len(lowRatioHashes) > 0 {
+		savings := int64(float64(lowRatioSize) * 0.6) // Assume 60% can be optimized
+		opportunities = append(opportunities, OptimizationOpportunity{
+			Type:        "ratio_optimization",
+			Title:       "Optimize Low-Ratio Torrents",
+			Description: fmt.Sprintf("Consider removing or reseeding %d torrents with poor upload/download ratios", len(lowRatioHashes)),
+			Priority:    "medium",
+			Savings:     savings,
+			Impact:      55.0,
+			Torrents:    lowRatioHashes,
+			Category:    "seeding",
+		})
+	}
+
+	// 4. Unused content opportunities
+	var unusedHashes []string
+	var unusedSize int64
+
+	for _, score := range scores {
+		if score.State == "paused" && score.LastActivity == 0 && score.Age > 30 { // Paused, never active, old
+			unusedHashes = append(unusedHashes, score.Hash)
+			unusedSize += score.Size
+		}
+	}
+
+	if len(unusedHashes) > 0 {
+		savings := int64(float64(unusedSize) * 0.9) // Assume 90% can be removed
+		opportunities = append(opportunities, OptimizationOpportunity{
+			Type:        "unused_content_cleanup",
+			Title:       "Remove Unused Content",
+			Description: fmt.Sprintf("Remove %d paused torrents that have never been active", len(unusedHashes)),
+			Priority:    "low",
+			Savings:     savings,
+			Impact:      75.0,
+			Torrents:    unusedHashes,
+			Category:    "storage",
+		})
+	}
+
+	// 5. High-value content preservation
+	var highValueHashes []string
+	var highValueSize int64
+
+	for _, score := range scores {
+		if score.EconomyScore > 8.0 && score.Seeds < 5 { // High value, rare content
+			highValueHashes = append(highValueHashes, score.Hash)
+			highValueSize += score.Size
+		}
+	}
+
+	if len(highValueHashes) > 0 {
+		opportunities = append(opportunities, OptimizationOpportunity{
+			Type:        "preserve_rare_content",
+			Title:       "Preserve Rare High-Value Content",
+			Description: fmt.Sprintf("Ensure %d rare, high-value torrents are properly seeded and backed up", len(highValueHashes)),
+			Priority:    "high",
+			Savings:     -highValueSize, // Negative savings = content to preserve
+			Impact:      95.0,
+			Torrents:    highValueHashes,
+			Category:    "seeding",
+		})
+	}
+
+	// Sort by impact (highest first)
+	sort.Slice(opportunities, func(i, j int) bool {
+		return opportunities[i].Impact > opportunities[j].Impact
+	})
+
+	return opportunities
+}
+
+// calculateStorageOptimization calculates comprehensive storage optimization data
+func (es *EconomyService) calculateStorageOptimization(scores []EconomyScore, duplicates map[string][]string) StorageOptimization {
+	var deduplicationSavings int64
+	var oldContentCleanupSavings int64
+	var ratioOptimizationSavings int64
+	var unusedContentSavings int64
+
+	// Calculate deduplication savings
+	for primaryHash, dupHashes := range duplicates {
+		var primarySize int64
+		for _, score := range scores {
+			if score.Hash == primaryHash {
+				primarySize = score.Size
+				break
+			}
+		}
+		deduplicationSavings += int64(float64(primarySize) * float64(len(dupHashes)) * 0.8)
+	}
+
+	// Calculate old content cleanup savings
+	for _, score := range scores {
+		if score.Seeds > 10 && score.Age > 90 && score.EconomyScore < 2.0 {
+			oldContentCleanupSavings += int64(float64(score.Size) * 0.9)
+		}
+	}
+
+	// Calculate ratio optimization savings
+	for _, score := range scores {
+		if score.Ratio < 0.5 && score.State == "seeding" && score.Age > 7 {
+			ratioOptimizationSavings += int64(float64(score.Size) * 0.7)
+		}
+	}
+
+	// Calculate unused content savings
+	for _, score := range scores {
+		if score.State == "paused" && score.LastActivity == 0 && score.Age > 30 {
+			unusedContentSavings += int64(float64(score.Size) * 0.95)
+		}
+	}
+
+	totalPotentialSavings := deduplicationSavings + oldContentCleanupSavings + ratioOptimizationSavings + unusedContentSavings
+
+	return StorageOptimization{
+		TotalPotentialSavings:    totalPotentialSavings,
+		DeduplicationSavings:     deduplicationSavings,
+		OldContentCleanupSavings: oldContentCleanupSavings,
+		RatioOptimizationSavings: ratioOptimizationSavings,
+		UnusedContentSavings:     unusedContentSavings,
+	}
+}
+
+// formatBytes formats bytes into human readable format
+func (es *EconomyService) formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

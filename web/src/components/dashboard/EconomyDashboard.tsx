@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
 import { formatBytes } from "@/lib/utils"
-import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap } from "lucide-react"
+import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
 import type { EconomyAnalysis } from "@/types"
 
 interface EconomyDashboardProps {
@@ -17,7 +18,7 @@ interface EconomyDashboardProps {
 }
 
 export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
-  const { stats, topValuable } = analysis
+  const { stats, topValuable, optimizations, storageOptimization } = analysis
 
   return (
     <div className="space-y-6">
@@ -106,6 +107,131 @@ export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Optimization Opportunities */}
+      {optimizations && optimizations.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-yellow-500" />
+              Optimization Opportunities
+            </CardTitle>
+            <CardDescription>
+              Recommended actions to improve your torrent economy and storage efficiency
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {optimizations.map((opportunity, index) => (
+                <div key={index} className="border rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold">{opportunity.title}</h4>
+                      <Badge
+                        variant={
+                          opportunity.priority === "high" ? "destructive" :
+                          opportunity.priority === "medium" ? "default" : "secondary"
+                        }
+                      >
+                        {opportunity.priority}
+                      </Badge>
+                      <Badge variant="outline">{opportunity.category}</Badge>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">
+                        {opportunity.savings > 0 ? "+" : ""}{formatBytes(opportunity.savings)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {opportunity.impact.toFixed(1)}% impact
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-2">{opportunity.description}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">
+                      {opportunity.torrents.length} affected torrent{opportunity.torrents.length !== 1 ? "s" : ""}
+                    </div>
+                    <Button variant="outline" size="sm">
+                      View Details
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Storage Optimization Breakdown */}
+      {storageOptimization && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Recycle className="h-5 w-5 text-green-500" />
+              Storage Optimization Breakdown
+            </CardTitle>
+            <CardDescription>
+              Detailed breakdown of potential storage savings by category
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {formatBytes(storageOptimization.totalPotentialSavings)}
+                </div>
+                <p className="text-sm text-muted-foreground">Total Potential Savings</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Deduplication</span>
+                    <span className="font-medium">{formatBytes(storageOptimization.deduplicationSavings)}</span>
+                  </div>
+                  <Progress
+                    value={(storageOptimization.deduplicationSavings / storageOptimization.totalPotentialSavings) * 100}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Old Content Cleanup</span>
+                    <span className="font-medium">{formatBytes(storageOptimization.oldContentCleanupSavings)}</span>
+                  </div>
+                  <Progress
+                    value={(storageOptimization.oldContentCleanupSavings / storageOptimization.totalPotentialSavings) * 100}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Ratio Optimization</span>
+                    <span className="font-medium">{formatBytes(storageOptimization.ratioOptimizationSavings)}</span>
+                  </div>
+                  <Progress
+                    value={(storageOptimization.ratioOptimizationSavings / storageOptimization.totalPotentialSavings) * 100}
+                    className="h-2"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Unused Content</span>
+                    <span className="font-medium">{formatBytes(storageOptimization.unusedContentSavings)}</span>
+                  </div>
+                  <Progress
+                    value={(storageOptimization.unusedContentSavings / storageOptimization.totalPotentialSavings) * 100}
+                    className="h-2"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Top Valuable Torrents */}
       <Card>
