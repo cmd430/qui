@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { defineConfig } from "vite"
-import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
-import { VitePWA } from "vite-plugin-pwa"
+import react from "@vitejs/plugin-react"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { defineConfig } from "vite"
+import { VitePWA } from "vite-plugin-pwa"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -26,7 +26,6 @@ export default defineConfig(({ mode }) => ({
         workbox: {
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3MB
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
-          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MiB
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
