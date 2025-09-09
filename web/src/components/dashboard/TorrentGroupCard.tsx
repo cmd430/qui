@@ -101,71 +101,73 @@ export function TorrentGroupCard({
 
   return (
     <Card className={`
-      ${group.groupType === "last_seed" ? "border-red-200 bg-red-50/50" : ""}
-      ${group.groupType === "duplicate" ? "border-blue-200 bg-blue-50/30" : ""}
-      ${group.priority <= 3 ? "shadow-md" : ""}
+      ${group.groupType === "last_seed" ? "border-red-200 bg-red-50/30" : ""}
+      ${group.groupType === "duplicate" ? "border-blue-200 bg-blue-50/20" : ""}
+      ${group.priority <= 3 ? "shadow-sm" : ""}
+      hover:shadow-sm transition-shadow
     `}>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-2">
             <Checkbox
               checked={allSelected}
               onCheckedChange={handleGroupSelect}
-              className="mt-1"
+              className="mt-0.5"
             />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                {getGroupIcon()}
-                <CardTitle className="text-base truncate">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="h-5 w-5 bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center">
+                  {getGroupIcon()}
+                </div>
+                <CardTitle className="text-sm truncate font-medium">
                   {group.primaryTorrent.name}
                 </CardTitle>
                 <span className={`text-xs ${getPriorityColor()}`}>
-                  Priority #{group.priority}
+                  #{group.priority}
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-1.5 mb-1">
                 {getGroupBadge()}
                 {getRecommendationBadge()}
                 {group.torrents.length > 1 && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                     {group.torrents.length} copies
                   </Badge>
                 )}
                 {group.potentialSavings > 0 && (
-                  <Badge variant="outline" className="text-xs text-green-600">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0.5 text-green-600">
                     Save {formatBytes(group.potentialSavings)}
                   </Badge>
                 )}
               </div>
-              <CardDescription className="text-sm">
+              <CardDescription className="text-xs">
                 {group.groupType === "last_seed" && (
                   <span className="text-amber-600 font-medium">
-                    ⚠️ Last remaining seed - removing may lose this content permanently
+                    ⚠️ Last seed - removing may lose content permanently
                   </span>
                 )}
                 {group.groupType === "duplicate" && (
                   <span>
-                    Multiple copies found. Consider keeping only the best copy.
-                    Total: {formatBytes(group.totalSize)} → {formatBytes(group.deduplicatedSize)}
+                    {formatBytes(group.totalSize)} → {formatBytes(group.deduplicatedSize)}
                   </span>
                 )}
                 {group.groupType === "unique" && (
                   <span>
-                    Single copy of content. Score: {group.primaryTorrent.economyScore.toFixed(2)}
+                    Score: {group.primaryTorrent.economyScore.toFixed(2)}
                   </span>
                 )}
               </CardDescription>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {group.torrents.length > 1 && (
               <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                     {isExpanded ? (
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-3 w-3" />
                     ) : (
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-3 w-3" />
                     )}
                   </Button>
                 </CollapsibleTrigger>
@@ -178,47 +180,48 @@ export function TorrentGroupCard({
       {group.torrents.length > 1 && (
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleContent>
-            <CardContent className="pt-0">
-              <div className="space-y-2">
+            <CardContent className="pt-0 pb-2">
+              <div className="space-y-1.5">
                 {group.torrents.map((torrent, index) => (
                   <div
                     key={torrent.hash}
                     className={`
-                      p-3 rounded-lg border
-                      ${index === 0 ? "border-green-200 bg-green-50" : "border-gray-200 bg-gray-50"}
+                      p-2 rounded-md border
+                      ${index === 0 ? "border-green-200 bg-green-50/50" : "border-gray-200 bg-gray-50/30"}
                     `}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
                         <Checkbox
                           checked={selectedTorrents.has(torrent.hash)}
                           onCheckedChange={(checked: boolean) => onSelectTorrent(torrent.hash, checked)}
+                          className="flex-shrink-0"
                         />
                         {index === 0 && (
-                          <Crown className="h-4 w-4 text-yellow-600" />
+                          <Crown className="h-3 w-3 text-yellow-600 flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm truncate" title={torrent.name}>
+                          <div className="font-medium text-xs truncate" title={torrent.name}>
                             {torrent.name}
                           </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-4">
-                            <span>Size: {formatBytes(torrent.size)}</span>
-                            <span>Seeds: {torrent.seeds}</span>
+                          <div className="text-xs text-muted-foreground flex items-center gap-3">
+                            <span>{formatBytes(torrent.size)}</span>
+                            <span>{torrent.seeds} seeds</span>
                             <span>Score: {torrent.economyScore.toFixed(2)}</span>
-                            <span>Age: {torrent.age}d</span>
+                            <span>{torrent.age}d old</span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                         {torrent.seeds === 0 && (
-                          <Badge variant="destructive" className="text-xs">
+                          <Badge variant="destructive" className="text-xs px-1.5 py-0.5">
                             Last Seed
                           </Badge>
                         )}
                         <Dialog>
                           <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <Info className="h-4 w-4" />
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <Info className="h-3 w-3" />
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="max-w-2xl">
@@ -264,19 +267,19 @@ export function TorrentGroupCard({
 
       {/* Single torrent display */}
       {group.torrents.length === 1 && (
-        <CardContent className="pt-0">
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <span>Size: {formatBytes(group.primaryTorrent.size)}</span>
-              <span>Seeds: {group.primaryTorrent.seeds}</span>
-              <span>Age: {group.primaryTorrent.age} days</span>
+        <CardContent className="pt-0 pb-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <span>{formatBytes(group.primaryTorrent.size)}</span>
+              <span>{group.primaryTorrent.seeds} seeds</span>
+              <span>{group.primaryTorrent.age}d old</span>
               <span>Score: {group.primaryTorrent.economyScore.toFixed(2)}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Info className="h-4 w-4 mr-2" />
+                  <Button variant="outline" size="sm" className="h-6 px-2 text-xs">
+                    <Info className="h-3 w-3 mr-1" />
                     Details
                   </Button>
                 </DialogTrigger>
@@ -310,7 +313,7 @@ export function TorrentGroupCard({
                         <h5 className="font-medium text-sm mb-1">Recommendations:</h5>
                         <div className="text-xs space-y-1">
                           {group.primaryTorrent.seeds === 0 && (
-                            <div className="text-red-600 font-medium">• CRITICAL: Last remaining seed - PRESERVE</div>
+                            <div className="text-red-600 font-medium">• CRITICAL: Last seed - PRESERVE</div>
                           )}
                           {group.primaryTorrent.economyScore < 20.0 && group.primaryTorrent.seeds > 10 && (
                             <div className="text-orange-600">• Well-seeded old content - consider removal</div>
@@ -334,10 +337,10 @@ export function TorrentGroupCard({
 
       {/* Torrent Actions */}
       {selectedHashesInGroup.length > 0 && (
-        <CardFooter className="pt-0">
+        <CardFooter className="pt-0 pb-2">
           <div className="flex justify-between items-center w-full">
-            <div className="text-sm text-muted-foreground">
-              {selectedHashesInGroup.length} torrent{selectedHashesInGroup.length !== 1 ? 's' : ''} selected
+            <div className="text-xs text-muted-foreground">
+              {selectedHashesInGroup.length} selected
             </div>
             <TorrentActions
               instanceId={instanceId}

@@ -80,61 +80,71 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
 
   return (
     <div className="space-y-6">
-      {/* Compact Overview Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="p-3">
+      {/* Overview Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-4 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Total Storage</p>
-              <p className="text-lg font-bold">{formatBytes(stats.totalStorage)}</p>
+              <p className="text-xl font-bold">{formatBytes(stats.totalStorage)}</p>
             </div>
-            <HardDrive className="h-4 w-4 text-muted-foreground" />
+            <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900/20 rounded-md flex items-center justify-center">
+              <HardDrive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
           </div>
         </Card>
 
-        <Card className="p-3">
+        <Card className="p-4 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Deduplicated</p>
-              <p className="text-lg font-bold">{formatBytes(stats.deduplicatedStorage)}</p>
+              <p className="text-xl font-bold">{formatBytes(stats.deduplicatedStorage)}</p>
             </div>
-            <Target className="h-4 w-4 text-muted-foreground" />
+            <div className="h-8 w-8 bg-green-100 dark:bg-green-900/20 rounded-md flex items-center justify-center">
+              <Target className="h-4 w-4 text-green-600 dark:text-green-400" />
+            </div>
           </div>
         </Card>
 
-        <Card className="p-3">
+        <Card className="p-4 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Avg Economy Score</p>
-              <p className="text-lg font-bold">{stats.averageEconomyScore.toFixed(1)}</p>
+              <p className="text-xl font-bold">{stats.averageEconomyScore.toFixed(1)}</p>
             </div>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <div className="h-8 w-8 bg-purple-100 dark:bg-purple-900/20 rounded-md flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            </div>
           </div>
         </Card>
 
-        <Card className="p-3">
+        <Card className="p-4 hover:shadow-sm transition-shadow">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Rare Content</p>
-              <p className="text-lg font-bold">{stats.rareContentCount}</p>
+              <p className="text-xl font-bold">{stats.rareContentCount}</p>
             </div>
-            <Star className="h-4 w-4 text-muted-foreground" />
+            <div className="h-8 w-8 bg-amber-100 dark:bg-amber-900/20 rounded-md flex items-center justify-center">
+              <Star className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
           </div>
         </Card>
       </div>
 
-      {/* Storage Efficiency - Compact */}
-      <Card>
+      {/* Storage Efficiency */}
+      <Card className="hover:shadow-sm transition-shadow">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Zap className="h-4 w-4" />
+            <div className="h-6 w-6 bg-blue-100 dark:bg-blue-900/20 rounded-md flex items-center justify-center">
+              <Zap className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+            </div>
             Storage Efficiency
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span>Deduplication Efficiency</span>
-            <span className="font-medium">
+            <span className="font-semibold text-green-600 dark:text-green-400">
               {((stats.storageSavings / stats.totalStorage) * 100).toFixed(1)}% saved
             </span>
           </div>
@@ -142,9 +152,17 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
             value={(stats.deduplicatedStorage / stats.totalStorage) * 100}
             className="h-2"
           />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Deduplicated: {formatBytes(stats.deduplicatedStorage)}</span>
-            <span>Total: {formatBytes(stats.totalStorage)}</span>
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Total Saved</p>
+              <p className="text-sm font-semibold">{formatBytes(stats.storageSavings)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Efficiency</p>
+              <p className="text-sm font-semibold">
+                {stats.totalStorage > 0 ? ((stats.deduplicatedStorage / stats.totalStorage) * 100).toFixed(1) : 0}%
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -518,7 +536,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                     </span>
                   )}
                 </div>
-                {totalPages > 1 && (
+                {totalPages > 1 || totalItems > pageSize ? (
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -540,7 +558,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                       Next
                     </Button>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Performance note for large datasets */}
