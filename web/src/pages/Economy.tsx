@@ -16,7 +16,7 @@ import { Loader2, TrendingUp, AlertCircle } from "lucide-react"
 export function Economy() {
   const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(25) // Increased default page size for better performance
 
   // Get all instances
   const { data: instances, isLoading: instancesLoading } = useQuery({
@@ -30,11 +30,8 @@ export function Economy() {
     queryFn: () => {
       if (!selectedInstanceId) return null
       
-      // Only send pagination parameters if they're not default values
-      const pageParam = currentPage !== 1 ? currentPage : undefined
-      const pageSizeParam = pageSize !== 10 ? pageSize : undefined
-      
-      return api.getEconomyAnalysis(selectedInstanceId, pageParam, pageSizeParam)
+      // Always send pagination parameters to ensure proper backend pagination
+      return api.getEconomyAnalysis(selectedInstanceId, currentPage, pageSize)
     },
     enabled: selectedInstanceId !== null,
     refetchInterval: 30000, // Refresh every 30 seconds
@@ -110,6 +107,25 @@ export function Economy() {
         </div>
 
         <div className="flex items-center gap-4">
+          <Select
+            value={pageSize.toString()}
+            onValueChange={(value) => {
+              const newPageSize = parseInt(value)
+              setPageSize(newPageSize)
+              setCurrentPage(1) // Reset to first page when changing page size
+            }}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Page size" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10 per page</SelectItem>
+              <SelectItem value="25">25 per page</SelectItem>
+              <SelectItem value="50">50 per page</SelectItem>
+              <SelectItem value="100">100 per page</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select
             value={selectedInstanceId?.toString() || ""}
             onValueChange={(value) => handleInstanceChange(parseInt(value))}

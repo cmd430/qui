@@ -509,11 +509,16 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
               </div>
 
               {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">
-                    Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalItems)} of {totalItems} torrents
-                  </div>
+              <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalItems)} of {totalItems} torrents
+                  {totalPages > 1 && (
+                    <span className="ml-2 text-xs">
+                      (Page {page} of {totalPages})
+                    </span>
+                  )}
+                </div>
+                {totalPages > 1 && (
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
@@ -535,8 +540,8 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
                       Next
                     </Button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Performance note for large datasets */}
               {totalItems > 100 && (

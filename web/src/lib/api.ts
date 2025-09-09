@@ -445,11 +445,17 @@ class ApiClient {
   // Economy endpoints
   async getEconomyAnalysis(instanceId: number, page?: number, pageSize?: number): Promise<EconomyAnalysis> {
     const searchParams = new URLSearchParams()
-    if (page !== undefined) searchParams.set("page", page.toString())
-    if (pageSize !== undefined) searchParams.set("pageSize", pageSize.toString())
+    
+    // Always include page parameter, defaulting to 1 if not provided
+    const pageValue = page || 1
+    searchParams.set("page", pageValue.toString())
+    
+    // Always include pageSize parameter, defaulting to 25 if not provided
+    const pageSizeValue = pageSize || 25
+    searchParams.set("pageSize", pageSizeValue.toString())
 
     const query = searchParams.toString()
-    const url = query ? `/instances/${instanceId}/torrents/economy?${query}` : `/instances/${instanceId}/torrents/economy`
+    const url = `/instances/${instanceId}/torrents/economy?${query}`
 
     return this.request<EconomyAnalysis>(url)
   }
