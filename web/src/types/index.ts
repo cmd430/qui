@@ -412,6 +412,7 @@ export interface EconomyScore {
   storageValue: number
   rarityBonus: number
   deduplicationFactor: number
+  reviewPriority: number
   duplicates?: string[]
   tracker: string
   state: string
@@ -456,4 +457,7 @@ export interface EconomyAnalysis {
   duplicates: Record<string, string[]>
   optimizations: OptimizationOpportunity[]
   storageOptimization: StorageOptimization
+  reviewTorrents: EconomyScore[]
+  reviewThreshold: number
+  torrentGroups: EconomyScore[][]
 }

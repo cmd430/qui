@@ -28,6 +28,7 @@ type EconomyScore struct {
 	StorageValue        float64  `json:"storageValue"`
 	RarityBonus         float64  `json:"rarityBonus"`
 	DeduplicationFactor float64  `json:"deduplicationFactor"`
+	ReviewPriority      float64  `json:"reviewPriority"` // Priority for review (lower = needs more attention)
 	Duplicates          []string `json:"duplicates,omitempty"` // Hash of duplicate torrents
 	Tracker             string   `json:"tracker"`
 	State               string   `json:"state"`
@@ -76,6 +77,9 @@ type EconomyAnalysis struct {
 	Duplicates          map[string][]string       `json:"duplicates"` // Map of content hash to torrent hashes
 	Optimizations       []OptimizationOpportunity `json:"optimizations"`
 	StorageOptimization StorageOptimization       `json:"storageOptimization"`
+	ReviewTorrents      []EconomyScore            `json:"reviewTorrents"`      // Pre-filtered and sorted torrents needing review
+	ReviewThreshold     float64                   `json:"reviewThreshold"`     // Threshold used for review filtering
+	TorrentGroups       [][]EconomyScore          `json:"torrentGroups"`       // Pre-grouped torrents by duplicates
 }
 
 // EconomyService handles torrent economy calculations
@@ -118,9 +122,11 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	// Update scores with deduplication factors
 	scores = es.applyDeduplicationFactors(scores, duplicates)
 
-	// Sort by economy score (highest first)
-	sort.Slice(scores, func(i, j int) bool {
-		return scores[i].EconomyScore > scores[j].EconomyScore
+	// Sort by economy score (highest first) for top valuable calculation
+	sortedScores := make([]EconomyScore, len(scores))
+	copy(sortedScores, scores)
+	sort.Slice(sortedScores, func(i, j int) bool {
+		return sortedScores[i].EconomyScore > sortedScores[j].EconomyScore
 	})
 
 	// Calculate statistics
@@ -132,11 +138,18 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 	// Calculate storage optimization data
 	storageOptimization := es.calculateStorageOptimization(scores, duplicates)
 
-	// Get top valuable torrents
-	topValuable := scores
+	// Get top valuable torrents (from sorted copy)
+	topValuable := sortedScores
 	if len(topValuable) > 20 {
 		topValuable = topValuable[:20]
 	}
+
+	// Calculate review threshold and filter review torrents
+	reviewThreshold := es.calculateReviewThreshold(scores)
+	reviewTorrents := es.buildReviewTorrents(scores, reviewThreshold)
+
+	// Create torrent groups
+	torrentGroups := es.createTorrentGroups(reviewTorrents)
 
 	return &EconomyAnalysis{
 		Scores:              scores,
@@ -145,6 +158,9 @@ func (es *EconomyService) AnalyzeEconomy(ctx context.Context, instanceID int) (*
 		Duplicates:          duplicates,
 		Optimizations:       optimizations,
 		StorageOptimization: storageOptimization,
+		ReviewTorrents:      reviewTorrents,
+		ReviewThreshold:     reviewThreshold,
+		TorrentGroups:       torrentGroups,
 	}, nil
 }
 
@@ -243,6 +259,7 @@ func (es *EconomyService) calculateSingleEconomyScore(torrent qbt.Torrent) Econo
 		StorageValue:        storageValue,
 		RarityBonus:         rarityBonus,
 		DeduplicationFactor: 1.0, // Will be updated later
+		ReviewPriority:      economyScore, // Will be updated later with uniqueness factor
 		Tracker:             torrent.Tracker,
 		State:               string(torrent.State),
 		Category:            torrent.Category,
@@ -354,12 +371,25 @@ func (es *EconomyService) applyDeduplicationFactors(scores []EconomyScore, dupli
 							score.Duplicates = append(score.Duplicates, h)
 						}
 					}
+					// Unique torrents get priority (lower ReviewPriority = higher priority)
+					score.ReviewPriority = score.EconomyScore
 				} else {
 					// Other copies get zero value (free storage)
 					score.DeduplicationFactor = 0.0
 					score.EconomyScore = 0.0
+					// Duplicates get lower priority (higher ReviewPriority = lower priority)
+					score.ReviewPriority = score.EconomyScore + 1000.0 // Large penalty for duplicates
 				}
 			}
+		}
+	}
+
+	// Set review priority for torrents not in any duplicate group (they're unique)
+	for i := range scores {
+		score := &scores[i]
+		if score.DeduplicationFactor == 1.0 && len(score.Duplicates) == 0 {
+			// This is a unique torrent, give it high priority
+			score.ReviewPriority = score.EconomyScore
 		}
 	}
 
@@ -734,4 +764,108 @@ func (es *EconomyService) formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// calculateReviewThreshold calculates the dynamic threshold for torrents needing review
+func (es *EconomyService) calculateReviewThreshold(scores []EconomyScore) float64 {
+	if len(scores) == 0 {
+		return 2.0 // Default fallback
+	}
+
+	// Calculate threshold as the 75th percentile of economy scores
+	// This ensures we focus on the worst 25% of torrents
+	sortedScores := make([]float64, len(scores))
+	for i, score := range scores {
+		sortedScores[i] = score.EconomyScore
+	}
+	sort.Float64s(sortedScores)
+
+	// 75th percentile (top 25% worst scores)
+	thresholdIndex := int(float64(len(sortedScores)) * 0.75)
+	if thresholdIndex >= len(sortedScores) {
+		thresholdIndex = len(sortedScores) - 1
+	}
+
+	threshold := sortedScores[thresholdIndex]
+
+	// Ensure threshold is at least 1.0 and at most 5.0
+	if threshold < 1.0 {
+		threshold = 1.0
+	} else if threshold > 5.0 {
+		threshold = 5.0
+	}
+
+	return threshold
+}
+
+// buildReviewTorrents builds the filtered and sorted list of torrents needing review
+func (es *EconomyService) buildReviewTorrents(scores []EconomyScore, threshold float64) []EconomyScore {
+	// Filter torrents that need review
+	var reviewCandidates []EconomyScore
+	for _, score := range scores {
+		if score.EconomyScore < threshold {
+			reviewCandidates = append(reviewCandidates, score)
+		}
+	}
+
+	// Sort by review priority (lowest first = highest priority)
+	sort.Slice(reviewCandidates, func(i, j int) bool {
+		if reviewCandidates[i].ReviewPriority != reviewCandidates[j].ReviewPriority {
+			return reviewCandidates[i].ReviewPriority < reviewCandidates[j].ReviewPriority
+		}
+		// Secondary sort: larger files first
+		return reviewCandidates[i].Size > reviewCandidates[j].Size
+	})
+
+	// Remove duplicates from the list (keep only the first occurrence of each hash)
+	seenHashes := make(map[string]bool)
+	var reviewTorrents []EconomyScore
+
+	for _, torrent := range reviewCandidates {
+		if !seenHashes[torrent.Hash] {
+			reviewTorrents = append(reviewTorrents, torrent)
+			seenHashes[torrent.Hash] = true
+		}
+	}
+
+	return reviewTorrents
+}
+
+// createTorrentGroups groups torrents by their duplicate relationships
+func (es *EconomyService) createTorrentGroups(reviewTorrents []EconomyScore) [][]EconomyScore {
+	var groups [][]EconomyScore
+	processed := make(map[string]bool)
+
+	for _, torrent := range reviewTorrents {
+		if processed[torrent.Hash] {
+			continue
+		}
+
+		var group []EconomyScore
+		group = append(group, torrent)
+		processed[torrent.Hash] = true
+
+		// Add all duplicates of this torrent
+		if torrent.Duplicates != nil {
+			for _, dupHash := range torrent.Duplicates {
+				// Find the duplicate in review torrents
+				for _, reviewTorrent := range reviewTorrents {
+					if reviewTorrent.Hash == dupHash && !processed[dupHash] {
+						group = append(group, reviewTorrent)
+						processed[dupHash] = true
+						break
+					}
+				}
+			}
+		}
+
+		// Sort group by review priority
+		sort.Slice(group, func(i, j int) bool {
+			return group[i].ReviewPriority < group[j].ReviewPriority
+		})
+
+		groups = append(groups, group)
+	}
+
+	return groups
 }

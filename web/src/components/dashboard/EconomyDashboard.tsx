@@ -13,7 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle, Trash2 } from "lucide-react"
-import type { EconomyAnalysis, EconomyScore } from "@/types"
+import type { EconomyAnalysis } from "@/types"
 import { useState } from "react"
 import { api } from "@/lib/api"
 
@@ -23,110 +23,14 @@ interface EconomyDashboardProps {
 }
 
 export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps) {
-  const { stats, topValuable, optimizations, storageOptimization } = analysis
+  const { stats, topValuable, optimizations, storageOptimization, reviewTorrents, torrentGroups } = analysis
   const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
   const [isRemoving, setIsRemoving] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
-  // Get low-value torrents for review (including duplicates with 0 score)
-  const buildReviewTorrents = () => {
-    const baseTorrents = analysis.scores
-      .filter(score => score.economyScore < 2.0) // Only include torrents that actually need review
-      .sort((a, b) => {
-        // Sort by economy score first (lowest first), then by size for same scores
-        if (a.economyScore !== b.economyScore) {
-          return a.economyScore - b.economyScore
-        }
-        return b.size - a.size // Larger files first for same score
-      })
-
-    const reviewTorrents: EconomyScore[] = []
-    const processedHashes = new Set<string>()
-
-    // Process each torrent and include its duplicates if any
-    for (const torrent of baseTorrents) {
-      if (processedHashes.has(torrent.hash)) {
-        continue // Already processed as part of a duplicate group
-      }
-
-      // Add the main torrent
-      reviewTorrents.push(torrent)
-      processedHashes.add(torrent.hash)
-
-      // If this torrent has duplicates, add all of them
-      if (torrent.duplicates && torrent.duplicates.length > 0) {
-        // Find and add all duplicate torrents
-        for (const dupHash of torrent.duplicates) {
-          const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
-          if (dupTorrent && !processedHashes.has(dupHash)) {
-            reviewTorrents.push(dupTorrent)
-            processedHashes.add(dupHash)
-          }
-        }
-
-        // Also check if any of the duplicates have their own duplicates array
-        // (in case the duplicate detection found additional relationships)
-        for (const dupHash of torrent.duplicates) {
-          const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
-          if (dupTorrent && dupTorrent.duplicates) {
-            for (const nestedDupHash of dupTorrent.duplicates) {
-              const nestedDupTorrent = analysis.scores.find(s => s.hash === nestedDupHash)
-              if (nestedDupTorrent && !processedHashes.has(nestedDupHash)) {
-                reviewTorrents.push(nestedDupTorrent)
-                processedHashes.add(nestedDupHash)
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return reviewTorrents
-  }
-
-  const lowValueTorrents = buildReviewTorrents()
-
-  // Group torrents by duplicate relationships for better display
-  const groupTorrentsByDuplicates = (torrents: EconomyScore[]) => {
-    const groups: EconomyScore[][] = []
-    const processed = new Set<string>()
-
-    for (const torrent of torrents) {
-      if (processed.has(torrent.hash)) continue
-
-      const group: EconomyScore[] = [torrent]
-      processed.add(torrent.hash)
-
-      // Find all related duplicates
-      const findRelated = (hash: string) => {
-        const torrent = analysis.scores.find(s => s.hash === hash)
-        if (!torrent) return
-
-        if (torrent.duplicates) {
-          for (const dupHash of torrent.duplicates) {
-            if (!processed.has(dupHash)) {
-              const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
-              if (dupTorrent) {
-                group.push(dupTorrent)
-                processed.add(dupHash)
-                findRelated(dupHash) // Recursively find nested duplicates
-              }
-            }
-          }
-        }
-      }
-
-      findRelated(torrent.hash)
-
-      // Sort group by economy score (lowest first for review)
-      group.sort((a, b) => a.economyScore - b.economyScore)
-
-      groups.push(group)
-    }
-
-    return groups
-  }
+  // Use pre-calculated data from backend
+  const lowValueTorrents = reviewTorrents
 
   // Calculate pagination
   const totalPages = Math.ceil(lowValueTorrents.length / itemsPerPage)
@@ -134,14 +38,12 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
   const endIndex = startIndex + itemsPerPage
   const currentTorrents = lowValueTorrents.slice(startIndex, endIndex)
 
-  const torrentGroups = groupTorrentsByDuplicates(currentTorrents)
-
   // Calculate estimated savings for selected torrents
   const calculateEstimatedSavings = () => {
     let totalSize = 0
     let deduplicationSavings = 0
 
-    selectedTorrents.forEach(hash => {
+    selectedTorrents.forEach((hash: string) => {
       const torrent = analysis.scores.find(s => s.hash === hash)
       if (torrent) {
         totalSize += torrent.size
@@ -169,7 +71,7 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
   const estimatedSavings = calculateEstimatedSavings()
 
   const handleSelectTorrent = (hash: string, checked: boolean) => {
-    setSelectedTorrents(prev => {
+    setSelectedTorrents((prev: Set<string>) => {
       const newSet = new Set(prev)
       if (checked) {
         newSet.add(hash)
@@ -183,12 +85,12 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       const allHashes = currentTorrents.map(torrent => torrent.hash)
-      setSelectedTorrents(prev => new Set([...prev, ...allHashes]))
+      setSelectedTorrents((prev: Set<string>) => new Set([...prev, ...allHashes]))
     } else {
       const currentHashes = new Set(currentTorrents.map(torrent => torrent.hash))
-      setSelectedTorrents(prev => {
+      setSelectedTorrents((prev: Set<string>) => {
         const newSet = new Set(prev)
-        currentHashes.forEach(hash => newSet.delete(hash))
+        currentHashes.forEach((hash: string) => newSet.delete(hash))
         return newSet
       })
     }
