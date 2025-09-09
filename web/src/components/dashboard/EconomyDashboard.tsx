@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Pagination } from "@/components/ui/pagination"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
 import type { EconomyAnalysis } from "@/types"
@@ -29,7 +30,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
 
   // Use paginated data from backend - backend handles grouping logic
   const { torrents: currentTorrents, torrentGroups: enhancedGroups, pagination } = reviewTorrents
-  const { page, pageSize, totalItems, totalPages, hasNextPage, hasPrevPage } = pagination
+  const { page, pageSize, totalItems, totalPages } = pagination
 
   // Backend determines if grouping should be used
   const shouldUseGroupedView = enhancedGroups && enhancedGroups.length > 0
@@ -527,38 +528,16 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
               </div>
 
               {/* Pagination Controls */}
-              <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
-                  Showing {((page - 1) * pageSize) + 1}-{Math.min(page * pageSize, totalItems)} of {totalItems} torrents
-                  {totalPages > 1 && (
-                    <span className="ml-2 text-xs">
-                      (Page {page} of {totalPages})
-                    </span>
-                  )}
-                </div>
-                {totalPages > 1 || totalItems > pageSize ? (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onPageChange?.(page - 1, pageSize)}
-                      disabled={!hasPrevPage}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm">
-                      Page {page} of {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onPageChange?.(page + 1, pageSize)}
-                      disabled={!hasNextPage}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                ) : null}
+              <div className="mt-4">
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  pageSize={pageSize}
+                  totalItems={totalItems}
+                  onPageChange={(newPage, newPageSize) => onPageChange?.(newPage, newPageSize)}
+                  showPageSizeSelector={false}
+                  showPageJump={true}
+                />
               </div>
 
               {/* Performance note for large datasets */}
