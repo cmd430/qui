@@ -13,8 +13,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatBytes } from "@/lib/utils"
 import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle, Trash2 } from "lucide-react"
-import type { EconomyAnalysis } from "@/types"
-import { useState } from "react"
+import type { EconomyAnalysis, EconomyScore } from "@/types"
+import { useState, Fragment } from "react"
 import { api } from "@/lib/api"
 
 interface EconomyDashboardProps {
@@ -26,6 +26,147 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
   const { stats, topValuable, optimizations, storageOptimization } = analysis
   const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
   const [isRemoving, setIsRemoving] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
+
+  // Get low-value torrents for review (including duplicates with 0 score)
+  const buildReviewTorrents = () => {
+    const baseTorrents = analysis.scores
+      .filter(score => score.economyScore >= 0) // Include duplicates (score = 0) but exclude invalid scores
+      .sort((a, b) => {
+        // Sort by economy score first (lowest first), then by size for same scores
+        if (a.economyScore !== b.economyScore) {
+          return a.economyScore - b.economyScore
+        }
+        return b.size - a.size // Larger files first for same score
+      })
+
+    const reviewTorrents: EconomyScore[] = []
+    const processedHashes = new Set<string>()
+
+    // Process each torrent and include its duplicates if any
+    for (const torrent of baseTorrents) {
+      if (processedHashes.has(torrent.hash)) {
+        continue // Already processed as part of a duplicate group
+      }
+
+      // Add the main torrent
+      reviewTorrents.push(torrent)
+      processedHashes.add(torrent.hash)
+
+      // If this torrent has duplicates, add all of them
+      if (torrent.duplicates && torrent.duplicates.length > 0) {
+        // Find and add all duplicate torrents
+        for (const dupHash of torrent.duplicates) {
+          const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
+          if (dupTorrent && !processedHashes.has(dupHash)) {
+            reviewTorrents.push(dupTorrent)
+            processedHashes.add(dupHash)
+          }
+        }
+
+        // Also check if any of the duplicates have their own duplicates array
+        // (in case the duplicate detection found additional relationships)
+        for (const dupHash of torrent.duplicates) {
+          const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
+          if (dupTorrent && dupTorrent.duplicates) {
+            for (const nestedDupHash of dupTorrent.duplicates) {
+              const nestedDupTorrent = analysis.scores.find(s => s.hash === nestedDupHash)
+              if (nestedDupTorrent && !processedHashes.has(nestedDupHash)) {
+                reviewTorrents.push(nestedDupTorrent)
+                processedHashes.add(nestedDupHash)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return reviewTorrents
+  }
+
+  const lowValueTorrents = buildReviewTorrents()
+
+  // Group torrents by duplicate relationships for better display
+  const groupTorrentsByDuplicates = (torrents: EconomyScore[]) => {
+    const groups: EconomyScore[][] = []
+    const processed = new Set<string>()
+
+    for (const torrent of torrents) {
+      if (processed.has(torrent.hash)) continue
+
+      const group: EconomyScore[] = [torrent]
+      processed.add(torrent.hash)
+
+      // Find all related duplicates
+      const findRelated = (hash: string) => {
+        const torrent = analysis.scores.find(s => s.hash === hash)
+        if (!torrent) return
+
+        if (torrent.duplicates) {
+          for (const dupHash of torrent.duplicates) {
+            if (!processed.has(dupHash)) {
+              const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
+              if (dupTorrent) {
+                group.push(dupTorrent)
+                processed.add(dupHash)
+                findRelated(dupHash) // Recursively find nested duplicates
+              }
+            }
+          }
+        }
+      }
+
+      findRelated(torrent.hash)
+
+      // Sort group by economy score (highest first)
+      group.sort((a, b) => b.economyScore - a.economyScore)
+
+      groups.push(group)
+    }
+
+    return groups
+  }
+
+  // Calculate pagination
+  const totalPages = Math.ceil(lowValueTorrents.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentTorrents = lowValueTorrents.slice(startIndex, endIndex)
+
+  const torrentGroups = groupTorrentsByDuplicates(currentTorrents)
+
+  // Calculate estimated savings for selected torrents
+  const calculateEstimatedSavings = () => {
+    let totalSize = 0
+    let deduplicationSavings = 0
+
+    selectedTorrents.forEach(hash => {
+      const torrent = analysis.scores.find(s => s.hash === hash)
+      if (torrent) {
+        totalSize += torrent.size
+
+        // If this torrent has duplicates, we can save the size of duplicates
+        if (torrent.duplicates && torrent.duplicates.length > 0) {
+          // Find the sizes of duplicate torrents
+          torrent.duplicates.forEach(dupHash => {
+            const dupTorrent = analysis.scores.find(s => s.hash === dupHash)
+            if (dupTorrent) {
+              deduplicationSavings += dupTorrent.size
+            }
+          })
+        }
+      }
+    })
+
+    return {
+      directSavings: totalSize,
+      deduplicationSavings,
+      totalSavings: totalSize + deduplicationSavings
+    }
+  }
+
+  const estimatedSavings = calculateEstimatedSavings()
 
   const handleSelectTorrent = (hash: string, checked: boolean) => {
     setSelectedTorrents(prev => {
@@ -41,14 +182,15 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      const allHashes = analysis.scores
-        .filter(score => score.economyScore > 0)
-        .sort((a, b) => a.economyScore - b.economyScore)
-        .slice(0, 10)
-        .map(torrent => torrent.hash)
-      setSelectedTorrents(new Set(allHashes))
+      const allHashes = currentTorrents.map(torrent => torrent.hash)
+      setSelectedTorrents(prev => new Set([...prev, ...allHashes]))
     } else {
-      setSelectedTorrents(new Set())
+      const currentHashes = new Set(currentTorrents.map(torrent => torrent.hash))
+      setSelectedTorrents(prev => {
+        const newSet = new Set(prev)
+        currentHashes.forEach(hash => newSet.delete(hash))
+        return newSet
+      })
     }
   }
 
@@ -456,6 +598,14 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
               <span className="text-sm font-medium">
                 {selectedTorrents.size} torrent{selectedTorrents.size !== 1 ? 's' : ''} selected
               </span>
+              <div className="text-sm text-muted-foreground">
+                Estimated savings: {formatBytes(estimatedSavings.totalSavings)}
+                {estimatedSavings.deduplicationSavings > 0 && (
+                  <span className="ml-2 text-green-600">
+                    (including {formatBytes(estimatedSavings.deduplicationSavings)} from deduplication)
+                  </span>
+                )}
+              </div>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="destructive" size="sm" disabled={isRemoving}>
@@ -467,7 +617,8 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
                   <AlertDialogHeader>
                     <AlertDialogTitle>Remove Selected Torrents</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Are you sure you want to remove {selectedTorrents.size} torrent{selectedTorrents.size !== 1 ? 's' : ''}? 
+                      Are you sure you want to remove {selectedTorrents.size} torrent{selectedTorrents.size !== 1 ? 's' : ''}?
+                      This will save approximately {formatBytes(estimatedSavings.totalSavings)} of storage space.
                       This action cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -487,11 +638,8 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
                 <TableHead className="w-12">
                   <Checkbox
                     checked={
-                      analysis.scores
-                        .filter(score => score.economyScore > 0)
-                        .sort((a, b) => a.economyScore - b.economyScore)
-                        .slice(0, 10)
-                        .every(torrent => selectedTorrents.has(torrent.hash))
+                      currentTorrents.length > 0 &&
+                      currentTorrents.every(torrent => selectedTorrents.has(torrent.hash))
                     }
                     onCheckedChange={handleSelectAll}
                   />
@@ -506,118 +654,174 @@ export function EconomyDashboard({ analysis, instanceId }: EconomyDashboardProps
               </TableRow>
             </TableHeader>
             <TableBody>
-              {analysis.scores
-                .filter(score => score.economyScore > 0) // Only show torrents with some value
-                .sort((a, b) => a.economyScore - b.economyScore) // Sort by lowest score first
-                .slice(0, 10) // Show top 10 lowest scoring
-                .map((torrent) => (
-                  <TableRow key={torrent.hash}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedTorrents.has(torrent.hash)}
-                        onCheckedChange={(checked) => handleSelectTorrent(torrent.hash, checked as boolean)}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
-                      {torrent.name}
-                    </TableCell>
-                    <TableCell>{formatBytes(torrent.size)}</TableCell>
-                    <TableCell>
-                      <Badge variant={torrent.seeds < 5 ? "destructive" : torrent.seeds < 10 ? "secondary" : "default"}>
-                        {torrent.seeds}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{torrent.age}</TableCell>
-                    <TableCell className="font-semibold text-red-600">
-                      {torrent.economyScore.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <span className={torrent.ratio < 0.5 ? "text-red-500" : torrent.ratio < 1.0 ? "text-yellow-500" : "text-green-500"}>
-                        {torrent.ratio.toFixed(2)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            Review
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                            <DialogTitle>Review Torrent: {torrent.name}</DialogTitle>
-                            <DialogDescription>
-                              Detailed analysis of this torrent's economy metrics
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <h4 className="font-semibold">Torrent Details</h4>
-                                <div className="text-sm space-y-1">
-                                  <div><strong>Size:</strong> {formatBytes(torrent.size)}</div>
-                                  <div><strong>Seeds:</strong> {torrent.seeds}</div>
-                                  <div><strong>Peers:</strong> {torrent.peers}</div>
-                                  <div><strong>Age:</strong> {torrent.age} days</div>
-                                  <div><strong>Ratio:</strong> {torrent.ratio.toFixed(2)}</div>
-                                  <div><strong>State:</strong> {torrent.state}</div>
-                                  <div><strong>Category:</strong> {torrent.category}</div>
+              {torrentGroups.map((group, groupIndex) => (
+                <React.Fragment key={`group-${groupIndex}`}>
+                  {group.map((torrent) => (
+                    <TableRow
+                      key={torrent.hash}
+                      className={group.length > 1 ? "border-l-4 border-l-blue-200 bg-blue-50/30" : ""}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedTorrents.has(torrent.hash)}
+                          onCheckedChange={(checked: boolean) => handleSelectTorrent(torrent.hash, checked)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
+                        <div className="flex items-center gap-2">
+                          {torrent.name}
+                          {group.length > 1 && (
+                            <Badge variant="outline" className="text-xs">
+                              Group {groupIndex + 1}
+                            </Badge>
+                          )}
+                          {torrent.deduplicationFactor === 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              Duplicate
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{formatBytes(torrent.size)}</TableCell>
+                      <TableCell>
+                        <Badge variant={torrent.seeds < 5 ? "destructive" : torrent.seeds < 10 ? "secondary" : "default"}>
+                          {torrent.seeds}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{torrent.age}</TableCell>
+                      <TableCell className="font-semibold text-red-600">
+                        {torrent.economyScore === 0 ? (
+                          <span className="text-gray-500">0.00 (Duplicate)</span>
+                        ) : (
+                          torrent.economyScore.toFixed(2)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className={torrent.ratio < 0.5 ? "text-red-500" : torrent.ratio < 1.0 ? "text-yellow-500" : "text-green-500"}>
+                          {torrent.ratio.toFixed(2)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              Review
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                              <DialogTitle>Review Torrent: {torrent.name}</DialogTitle>
+                              <DialogDescription>
+                                Detailed analysis of this torrent's economy metrics
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold">Torrent Details</h4>
+                                  <div className="text-sm space-y-1">
+                                    <div><strong>Size:</strong> {formatBytes(torrent.size)}</div>
+                                    <div><strong>Seeds:</strong> {torrent.seeds}</div>
+                                    <div><strong>Peers:</strong> {torrent.peers}</div>
+                                    <div><strong>Age:</strong> {torrent.age} days</div>
+                                    <div><strong>Ratio:</strong> {torrent.ratio.toFixed(2)}</div>
+                                    <div><strong>State:</strong> {torrent.state}</div>
+                                    <div><strong>Category:</strong> {torrent.category}</div>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="space-y-2">
-                                <h4 className="font-semibold">Economy Analysis</h4>
-                                <div className="text-sm space-y-1">
-                                  <div><strong>Economy Score:</strong> {torrent.economyScore.toFixed(2)}</div>
-                                  <div><strong>Storage Value:</strong> {torrent.storageValue.toFixed(2)} GB</div>
-                                  <div><strong>Rarity Bonus:</strong> {torrent.rarityBonus.toFixed(1)}x</div>
-                                  <div><strong>Deduplication Factor:</strong> {torrent.deduplicationFactor.toFixed(2)}</div>
-                                </div>
-                                <div className="pt-2">
-                                  <h5 className="font-medium text-sm mb-1">Recommendations:</h5>
-                                  <div className="text-xs space-y-1">
-                                    {torrent.economyScore < 1.0 && (
-                                      <div className="text-red-600">• Low value - consider removal</div>
-                                    )}
-                                    {torrent.ratio < 0.5 && (
-                                      <div className="text-yellow-600">• Poor ratio - may need reseeding</div>
-                                    )}
-                                    {torrent.seeds < 5 && torrent.age > 30 && (
-                                      <div className="text-orange-600">• Rare but old - evaluate retention</div>
-                                    )}
-                                    {torrent.seeds > 10 && torrent.age > 90 && (
-                                      <div className="text-blue-600">• Well-seeded old content - potential cleanup</div>
-                                    )}
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold">Economy Analysis</h4>
+                                  <div className="text-sm space-y-1">
+                                    <div><strong>Economy Score:</strong> {torrent.economyScore.toFixed(2)}</div>
+                                    <div><strong>Storage Value:</strong> {torrent.storageValue.toFixed(2)} GB</div>
+                                    <div><strong>Rarity Bonus:</strong> {torrent.rarityBonus.toFixed(1)}x</div>
+                                    <div><strong>Deduplication Factor:</strong> {torrent.deduplicationFactor.toFixed(2)}</div>
+                                  </div>
+                                  <div className="pt-2">
+                                    <h5 className="font-medium text-sm mb-1">Recommendations:</h5>
+                                    <div className="text-xs space-y-1">
+                                      {torrent.economyScore < 1.0 && (
+                                        <div className="text-red-600">• Low value - consider removal</div>
+                                      )}
+                                      {torrent.ratio < 0.5 && (
+                                        <div className="text-yellow-600">• Poor ratio - may need reseeding</div>
+                                      )}
+                                      {torrent.seeds < 5 && torrent.age > 30 && (
+                                        <div className="text-orange-600">• Rare but old - evaluate retention</div>
+                                      )}
+                                      {torrent.seeds > 10 && torrent.age > 90 && (
+                                        <div className="text-blue-600">• Well-seeded old content - potential cleanup</div>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
+                              <div className="flex gap-2 pt-4">
+                                <Button variant="outline" size="sm">
+                                  Keep Torrent
+                                </Button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleRemoveTorrent(torrent.hash)}
+                                >
+                                  Remove Torrent
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleRecheckTorrent(torrent.hash)}
+                                >
+                                  Recheck Ratio
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2 pt-4">
-                              <Button variant="outline" size="sm">
-                                Keep Torrent
-                              </Button>
-                              <Button 
-                                variant="destructive" 
-                                size="sm"
-                                onClick={() => handleRemoveTorrent(torrent.hash)}
-                              >
-                                Remove Torrent
-                              </Button>
-                              <Button 
-                                variant="secondary" 
-                                size="sm"
-                                onClick={() => handleRecheckTorrent(torrent.hash)}
-                              >
-                                Recheck Ratio
-                              </Button>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          </DialogContent>
+                        </Dialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {groupIndex < torrentGroups.length - 1 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-1">
+                        <div className="border-t border-gray-200"></div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </React.Fragment>
+              ))}
             </TableBody>
           </Table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{Math.min(endIndex, lowValueTorrents.length)} of {lowValueTorrents.length} torrents
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
