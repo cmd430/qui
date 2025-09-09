@@ -390,14 +390,20 @@ export function createEconomyColumns(
       },
       cell: ({ row }: any) => {
         const factor = row.original.deduplicationFactor
+        const isDuplicate = row.original.duplicates && row.original.duplicates.length > 0
 
         return (
           <div className="text-center">
-            <div className={`font-medium ${factor > 0.8 ? "text-green-600" : factor > 0.5 ? "text-yellow-600" : "text-red-600"}`}>
-              {(factor * 100).toFixed(0)}%
+            <div className={`font-medium ${factor > 0.8 ? "text-green-600" : factor > 0.5 ? "text-yellow-600" : factor === 0 ? "text-muted-foreground" : "text-red-600"}`}>
+              {factor === 0 && !isDuplicate ? "N/A" : `${(factor * 100).toFixed(0)}%`}
             </div>
             <div className="text-xs text-muted-foreground">
-              {formatBytes(row.original.storageValue * (1 - factor))} saved
+              {factor === 0 && !isDuplicate
+                ? "No duplicates"
+                : factor > 0
+                  ? `${formatBytes(row.original.storageValue * factor)} savable`
+                  : "Keep this copy"
+              }
             </div>
           </div>
         )

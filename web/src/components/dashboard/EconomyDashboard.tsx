@@ -316,7 +316,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   const filteredTorrents = useMemo(() => {
     let filtered = sortedTorrents
 
-    // Filter out duplicates entirely - only show individual torrents or groups
+    // Only show torrents with deduplication potential (part of duplicate groups)
     filtered = filtered.filter(torrent => torrent.deduplicationFactor > 0)
 
     // Filter by economy score
@@ -329,9 +329,14 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
       })
     }
 
-    // Filter by deduplication factor
+    // Filter by deduplication factor (only show torrents with deduplication potential)
     if (filterDeduplicationMin !== "" || filterDeduplicationMax !== "") {
       filtered = filtered.filter(torrent => {
+        // Only consider torrents that are part of duplicate groups
+        if (!torrent.duplicates || torrent.duplicates.length === 0) {
+          return false
+        }
+
         const factor = torrent.deduplicationFactor
         const minCheck = filterDeduplicationMin === "" || factor >= filterDeduplicationMin
         const maxCheck = filterDeduplicationMax === "" || factor <= filterDeduplicationMax

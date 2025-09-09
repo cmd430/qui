@@ -663,8 +663,8 @@ func (es *EconomyService) processDuplicateGroups(scores []EconomyScore, duplicat
 		for _, hash := range allHashes {
 			if score := scoreMap[hash]; score != nil {
 				if hash == bestHash {
-					// Best copy is the keeper
-					score.DeduplicationFactor = 1.0
+					// Best copy is the keeper - no deduplication savings from this torrent
+					score.DeduplicationFactor = 0.0
 					score.Duplicates = make([]string, 0, len(allHashes)-1)
 					for _, h := range allHashes {
 						if h != bestHash {
@@ -674,7 +674,8 @@ func (es *EconomyService) processDuplicateGroups(scores []EconomyScore, duplicat
 					score.ReviewPriority = score.EconomyScore
 				} else {
 					// Other copies are marked for potential storage optimization
-					score.DeduplicationFactor = 0.0
+					// 100% of their storage can be saved by removing them
+					score.DeduplicationFactor = 1.0
 					score.ReviewPriority = score.EconomyScore * 0.95
 
 					// Populate duplicates array
@@ -695,6 +696,8 @@ func (es *EconomyService) setUniqueTorrentReviewPriorities(scores []EconomyScore
 	for i := range scores {
 		score := &scores[i]
 		if !duplicateHashSet[score.Hash] {
+			// Unique torrents have no deduplication potential
+			score.DeduplicationFactor = 0.0
 			score.ReviewPriority = score.EconomyScore
 		}
 	}
