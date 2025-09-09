@@ -13,12 +13,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Pagination } from "@/components/ui/pagination"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from "@/components/ui/tooltip"
+import { PaginationWrapper } from "@/components/economy/pagination-wrapper"
 import {
   Table,
   TableBody,
@@ -27,8 +22,13 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "@/components/ui/tooltip"
+import { getLinuxIsoName, useIncognitoMode } from "@/lib/incognito"
 import { cn } from "@/lib/utils"
-import { useIncognitoMode, getLinuxIsoName } from "@/lib/incognito"
 import type { EconomyAnalysis, EconomyScore } from "@/types"
 import {
   flexRender,
@@ -353,7 +353,7 @@ export function EconomyTable({
       {/* Pagination */}
       {pagination && pagination.totalPages > 1 && (
         <div className="px-6 py-3 border-t bg-background">
-          <Pagination
+          <PaginationWrapper
             currentPage={pagination.page}
             totalPages={pagination.totalPages}
             pageSize={pagination.pageSize}
