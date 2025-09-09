@@ -419,7 +419,7 @@ func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays
 func (es *EconomyService) findDuplicates(ctx context.Context, instanceID int, torrents []qbt.Torrent) map[string][]string {
 	duplicates := make(map[string][]string)
 
-	// Group by normalized name only
+	// Group by normalized name first (for performance)
 	contentGroups := make(map[string][]qbt.Torrent)
 
 	for _, torrent := range torrents {
@@ -428,24 +428,57 @@ func (es *EconomyService) findDuplicates(ctx context.Context, instanceID int, to
 		contentGroups[normalizedName] = append(contentGroups[normalizedName], torrent)
 	}
 
-	// For groups with multiple torrents, treat them as duplicates based on name match only
+	// For groups with multiple torrents, verify file overlap before marking as duplicates
 	for _, group := range contentGroups {
 		if len(group) > 1 {
-			// Use the first torrent as primary, rest as duplicates
-			primaryHash := group[0].Hash
-			var dupHashes []string
+			// Sort group by size (prefer larger/older torrents as primary)
+			sort.Slice(group, func(i, j int) bool {
+				if group[i].Size != group[j].Size {
+					return group[i].Size > group[j].Size
+				}
+				addedTimeI := time.Unix(group[i].AddedOn, 0)
+				addedTimeJ := time.Unix(group[j].AddedOn, 0)
+				return addedTimeI.Before(addedTimeJ)
+			})
 
-			for i := 1; i < len(group); i++ {
-				dupHashes = append(dupHashes, group[i].Hash)
+			// Get file information for all torrents in this group
+			fileInfos := es.getBatchTorrentFiles(ctx, instanceID, group)
+			if len(fileInfos) == 0 {
+				continue // Skip if we can't get file info
 			}
 
-			duplicates[primaryHash] = dupHashes
+			// Use first torrent as potential primary
+			primary := group[0]
+			primaryFiles, hasPrimaryFiles := fileInfos[primary.Hash]
+			if !hasPrimaryFiles {
+				continue // Skip if primary has no file info
+			}
+
+			var trueDuplicates []qbt.Torrent
+
+			// Check each other torrent against the primary for file overlap
+			for i := 1; i < len(group); i++ {
+				if dupFiles, hasDupFiles := fileInfos[group[i].Hash]; hasDupFiles {
+					if es.hasSignificantFileOverlap(primaryFiles, dupFiles) {
+						trueDuplicates = append(trueDuplicates, group[i])
+					}
+				}
+			}
+
+			// Only mark as duplicates if we found actual file overlap
+			if len(trueDuplicates) > 0 {
+				var dupHashes []string
+				for _, dup := range trueDuplicates {
+					dupHashes = append(dupHashes, dup.Hash)
+				}
+				duplicates[primary.Hash] = dupHashes
+			}
 		}
 	}
 
 	log.Debug().
 		Int("duplicateGroups", len(duplicates)).
-		Msg("Found duplicate content groups based on name matching")
+		Msg("Found duplicate content groups with file verification")
 
 	return duplicates
 }
