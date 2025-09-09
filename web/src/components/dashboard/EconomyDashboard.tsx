@@ -23,7 +23,6 @@ interface EconomyDashboardProps {
 
 export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
   const { stats, topValuable, optimizations, storageOptimization } = analysis
-  const [selectedOpportunity, setSelectedOpportunity] = useState<number | null>(null)
   const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
   const [isRemoving, setIsRemoving] = useState(false)
 
