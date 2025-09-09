@@ -30,7 +30,7 @@ import {
   useReactTable
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
   AlertDialog,
@@ -77,11 +77,11 @@ import {
   getLinuxIsoName,
   useIncognitoMode
 } from "@/lib/incognito"
-import { formatSpeed } from "@/lib/utils"
+
 import type { EconomyScore, TorrentGroup } from "@/types"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSearch } from "@tanstack/react-router"
-import { CheckCircle, ChevronDown, ChevronUp, Columns3, Copy, Eye, EyeOff, Folder, Loader2, Pause, Play, Radio, Settings2, Sparkles, Tag, Trash2 } from "lucide-react"
+import { CheckCircle, Columns3, Copy, Eye, EyeOff, Folder, Loader2, Pause, Play, Radio, Tag, Trash2 } from "lucide-react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { AddTorrentDialog } from "../torrents/AddTorrentDialog"
@@ -170,7 +170,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
 
   // Track user-initiated actions to differentiate from automatic data updates
   const [lastUserAction, setLastUserAction] = useState<{ type: string; timestamp: number } | null>(null)
-  const previousFiltersRef = useRef({})
   const previousInstanceIdRef = useRef(instanceId)
   const previousSearchRef = useRef("")
 
@@ -231,14 +230,13 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
   }, [instanceId, effectiveSearch])
 
   // Map TanStack Table column IDs to backend field names
-  const getBackendSortField = (columnId: string): string => {
-    return columnId || "economyScore"
-  }
 
   // Use analysis data directly
-  const { stats, reviewTorrents } = analysis
-  const { torrents: currentTorrents, torrentGroups: enhancedGroups, pagination } = reviewTorrents
+  const { reviewTorrents } = analysis
+  const { torrents: currentTorrents, pagination } = reviewTorrents
   const { page, pageSize, totalItems, totalPages } = pagination
+
+  const hasLoadedAll = page >= totalPages
 
   // Show refetch indicator only if fetching takes more than 2 seconds
   useEffect(() => {
@@ -1282,8 +1280,6 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                           // Use selected torrents if this row is part of selection, or just this torrent
                           const useSelection = row.getIsSelected() || isAllSelected
                           const hashes = useSelection ? selectedHashes : [torrent.hash]
-                          const torrents = useSelection ? selectedTorrents : [torrent]
-                          const count = isAllSelected ? effectiveSelectionCount : hashes.length
 
                           // EconomyScore doesn't have auto_tmm field, so skip this section
                           return null
@@ -1338,7 +1334,7 @@ export const EconomyDashboard = memo(function EconomyDashboard({ analysis, insta
                 {sortedTorrents.length} torrent{sortedTorrents.length !== 1 ? "s" : ""} needing review
                 {hasLoadedAll ? (
                   ""
-                ) : isLoadingMore ? (
+                ) : isLoadingMoreRows ? (
                   " (loading more...)"
                 ) : (
                   ` (${sortedTorrents.length} of ${totalItems} loaded • Scroll to load more)`
