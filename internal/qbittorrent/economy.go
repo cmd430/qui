@@ -542,19 +542,6 @@ func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomySco
 	}
 
 	if len(oldWellSeededHashes) > 0 {
-		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "old_content_cleanup",
-			Title:       "Clean Up Old Well-Seeded Content",
-			Description: fmt.Sprintf("Remove %d old, well-seeded torrents that are no longer providing value", len(oldWellSeededHashes)),
-			Priority:    "medium",
-			Savings:     oldWellSeededSize,
-			Impact:      65.0,
-			Torrents:    oldWellSeededHashes,
-			Category:    "storage",
-		})
-	}
-
-	if len(oldWellSeededHashes) > 0 {
 		savings := int64(float64(oldWellSeededSize) * 0.8) // Assume 80% can be cleaned up
 		opportunities = append(opportunities, OptimizationOpportunity{
 			Type:        "old_content_cleanup",
