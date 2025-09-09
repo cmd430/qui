@@ -8,9 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Checkbox } from "@/components/ui/checkbox"
 import { formatBytes } from "@/lib/utils"
-import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle } from "lucide-react"
+import { TrendingUp, HardDrive, Target, AlertTriangle, Star, Zap, Lightbulb, Recycle, Trash2 } from "lucide-react"
 import type { EconomyAnalysis } from "@/types"
+import { useState } from "react"
 
 interface EconomyDashboardProps {
   analysis: EconomyAnalysis
@@ -19,6 +23,59 @@ interface EconomyDashboardProps {
 
 export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
   const { stats, topValuable, optimizations, storageOptimization } = analysis
+  const [selectedOpportunity, setSelectedOpportunity] = useState<number | null>(null)
+  const [selectedTorrents, setSelectedTorrents] = useState<Set<string>>(new Set())
+  const [isRemoving, setIsRemoving] = useState(false)
+
+  const handleSelectTorrent = (hash: string, checked: boolean) => {
+    setSelectedTorrents(prev => {
+      const newSet = new Set(prev)
+      if (checked) {
+        newSet.add(hash)
+      } else {
+        newSet.delete(hash)
+      }
+      return newSet
+    })
+  }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allHashes = analysis.scores
+        .filter(score => score.economyScore > 0)
+        .sort((a, b) => a.economyScore - b.economyScore)
+        .slice(0, 10)
+        .map(torrent => torrent.hash)
+      setSelectedTorrents(new Set(allHashes))
+    } else {
+      setSelectedTorrents(new Set())
+    }
+  }
+
+  const handleRemoveSelected = async () => {
+    if (selectedTorrents.size === 0) return
+
+    setIsRemoving(true)
+    try {
+      // Here you would implement the actual removal logic
+      // For now, we'll just simulate the removal
+      console.log('Removing torrents:', Array.from(selectedTorrents))
+      
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // Clear selection after successful removal
+      setSelectedTorrents(new Set())
+      
+      // You would also need to refresh the analysis data here
+      // This would typically trigger a refetch of the economy data
+      
+    } catch (error) {
+      console.error('Failed to remove torrents:', error)
+    } finally {
+      setIsRemoving(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -151,9 +208,81 @@ export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
                     <div className="text-xs text-muted-foreground">
                       {opportunity.torrents.length} affected torrent{opportunity.torrents.length !== 1 ? "s" : ""}
                     </div>
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          View Details
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>{opportunity.title}</DialogTitle>
+                          <DialogDescription>{opportunity.description}</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-semibold mb-2">Opportunity Details</h4>
+                              <div className="space-y-2 text-sm">
+                                <div><strong>Type:</strong> {opportunity.type}</div>
+                                <div><strong>Priority:</strong> 
+                                  <Badge 
+                                    variant={
+                                      opportunity.priority === "high" ? "destructive" :
+                                      opportunity.priority === "medium" ? "default" : "secondary"
+                                    }
+                                    className="ml-2"
+                                  >
+                                    {opportunity.priority}
+                                  </Badge>
+                                </div>
+                                <div><strong>Category:</strong> {opportunity.category}</div>
+                                <div><strong>Impact Score:</strong> {opportunity.impact.toFixed(1)}%</div>
+                                <div><strong>Potential Savings:</strong> {formatBytes(opportunity.savings)}</div>
+                                <div><strong>Affected Torrents:</strong> {opportunity.torrents.length}</div>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="font-semibold mb-2">Affected Torrents</h4>
+                              <div className="max-h-60 overflow-y-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Name</TableHead>
+                                      <TableHead>Size</TableHead>
+                                      <TableHead>Seeds</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {opportunity.torrents.slice(0, 10).map((hash) => {
+                                      const score = analysis.scores.find(s => s.hash === hash)
+                                      return score ? (
+                                        <TableRow key={hash}>
+                                          <TableCell className="max-w-xs truncate" title={score.name}>
+                                            {score.name}
+                                          </TableCell>
+                                          <TableCell>{formatBytes(score.size)}</TableCell>
+                                          <TableCell>
+                                            <Badge variant={score.seeds < 5 ? "destructive" : "default"}>
+                                              {score.seeds}
+                                            </Badge>
+                                          </TableCell>
+                                        </TableRow>
+                                      ) : null
+                                    })}
+                                  </TableBody>
+                                </Table>
+                                {opportunity.torrents.length > 10 && (
+                                  <p className="text-sm text-muted-foreground mt-2">
+                                    And {opportunity.torrents.length - 10} more torrents...
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
               ))}
@@ -281,6 +410,180 @@ export function EconomyDashboard({ analysis }: EconomyDashboardProps) {
                   </TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Lowest Value Torrents */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            Torrents Needing Review
+          </CardTitle>
+          <CardDescription>
+            Torrents with the lowest economy scores that may need attention or removal
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {selectedTorrents.size > 0 && (
+            <div className="flex items-center gap-2 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <span className="text-sm font-medium">
+                {selectedTorrents.size} torrent{selectedTorrents.size !== 1 ? 's' : ''} selected
+              </span>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={isRemoving}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {isRemoving ? 'Removing...' : 'Remove Selected'}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove Selected Torrents</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to remove {selectedTorrents.size} torrent{selectedTorrents.size !== 1 ? 's' : ''}? 
+                      This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRemoveSelected} className="bg-red-600 hover:bg-red-700">
+                      Remove
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={
+                      analysis.scores
+                        .filter(score => score.economyScore > 0)
+                        .sort((a, b) => a.economyScore - b.economyScore)
+                        .slice(0, 10)
+                        .every(torrent => selectedTorrents.has(torrent.hash))
+                    }
+                    onCheckedChange={handleSelectAll}
+                  />
+                </TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Seeds</TableHead>
+                <TableHead>Age (days)</TableHead>
+                <TableHead>Economy Score</TableHead>
+                <TableHead>Ratio</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {analysis.scores
+                .filter(score => score.economyScore > 0) // Only show torrents with some value
+                .sort((a, b) => a.economyScore - b.economyScore) // Sort by lowest score first
+                .slice(0, 10) // Show top 10 lowest scoring
+                .map((torrent) => (
+                  <TableRow key={torrent.hash}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedTorrents.has(torrent.hash)}
+                        onCheckedChange={(checked) => handleSelectTorrent(torrent.hash, checked as boolean)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium max-w-xs truncate" title={torrent.name}>
+                      {torrent.name}
+                    </TableCell>
+                    <TableCell>{formatBytes(torrent.size)}</TableCell>
+                    <TableCell>
+                      <Badge variant={torrent.seeds < 5 ? "destructive" : torrent.seeds < 10 ? "secondary" : "default"}>
+                        {torrent.seeds}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{torrent.age}</TableCell>
+                    <TableCell className="font-semibold text-red-600">
+                      {torrent.economyScore.toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <span className={torrent.ratio < 0.5 ? "text-red-500" : torrent.ratio < 1.0 ? "text-yellow-500" : "text-green-500"}>
+                        {torrent.ratio.toFixed(2)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            Review
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Review Torrent: {torrent.name}</DialogTitle>
+                            <DialogDescription>
+                              Detailed analysis of this torrent's economy metrics
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold">Torrent Details</h4>
+                                <div className="text-sm space-y-1">
+                                  <div><strong>Size:</strong> {formatBytes(torrent.size)}</div>
+                                  <div><strong>Seeds:</strong> {torrent.seeds}</div>
+                                  <div><strong>Peers:</strong> {torrent.peers}</div>
+                                  <div><strong>Age:</strong> {torrent.age} days</div>
+                                  <div><strong>Ratio:</strong> {torrent.ratio.toFixed(2)}</div>
+                                  <div><strong>State:</strong> {torrent.state}</div>
+                                  <div><strong>Category:</strong> {torrent.category}</div>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <h4 className="font-semibold">Economy Analysis</h4>
+                                <div className="text-sm space-y-1">
+                                  <div><strong>Economy Score:</strong> {torrent.economyScore.toFixed(2)}</div>
+                                  <div><strong>Storage Value:</strong> {torrent.storageValue.toFixed(2)} GB</div>
+                                  <div><strong>Rarity Bonus:</strong> {torrent.rarityBonus.toFixed(1)}x</div>
+                                  <div><strong>Deduplication Factor:</strong> {torrent.deduplicationFactor.toFixed(2)}</div>
+                                </div>
+                                <div className="pt-2">
+                                  <h5 className="font-medium text-sm mb-1">Recommendations:</h5>
+                                  <div className="text-xs space-y-1">
+                                    {torrent.economyScore < 1.0 && (
+                                      <div className="text-red-600">• Low value - consider removal</div>
+                                    )}
+                                    {torrent.ratio < 0.5 && (
+                                      <div className="text-yellow-600">• Poor ratio - may need reseeding</div>
+                                    )}
+                                    {torrent.seeds < 5 && torrent.age > 30 && (
+                                      <div className="text-orange-600">• Rare but old - evaluate retention</div>
+                                    )}
+                                    {torrent.seeds > 10 && torrent.age > 90 && (
+                                      <div className="text-blue-600">• Well-seeded old content - potential cleanup</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 pt-4">
+                              <Button variant="outline" size="sm">
+                                Keep Torrent
+                              </Button>
+                              <Button variant="destructive" size="sm">
+                                Remove Torrent
+                              </Button>
+                              <Button variant="secondary" size="sm">
+                                Recheck Ratio
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         </CardContent>

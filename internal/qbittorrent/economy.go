@@ -49,7 +49,7 @@ type EconomyStats struct {
 
 // OptimizationOpportunity represents a specific optimization opportunity
 type OptimizationOpportunity struct {
-	Type        string  `json:"type"`        // "duplicate_removal", "old_content_cleanup", "ratio_optimization", etc.
+	Type        string  `json:"type"`        // "cross_seeding_opportunity", "old_content_cleanup", "ratio_optimization", etc.
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Priority    string  `json:"priority"`    // "high", "medium", "low"
@@ -429,9 +429,9 @@ func (es *EconomyService) calculateOptimizationOpportunities(scores []EconomySco
 		savings := int64(float64(totalDuplicateSize) * 0.7) // Assume 70% of duplicate content can be removed
 
 		opportunities = append(opportunities, OptimizationOpportunity{
-			Type:        "duplicate_removal",
-			Title:       "Remove Duplicate Content",
-			Description: fmt.Sprintf("Remove %d duplicate torrents to save %s of storage", len(duplicateHashes)-len(duplicates), es.formatBytes(savings)),
+			Type:        "cross_seeding_opportunity",
+			Title:       "Enable Cross-Seeding",
+			Description: fmt.Sprintf("Enable cross-seeding for %d duplicate content groups to save %s of storage", len(duplicates), es.formatBytes(savings)),
 			Priority:    "high",
 			Savings:     savings,
 			Impact:      85.0,
