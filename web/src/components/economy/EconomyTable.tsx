@@ -241,7 +241,7 @@ export function EconomyTable({
       {/* Table */}
       <div
         ref={tableContainerRef}
-        className="flex-1 overflow-auto relative"
+        className="flex-1 px-6 overflow-auto relative"
       >
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
