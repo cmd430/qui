@@ -49,7 +49,6 @@ export function TorrentGroupCard({
 
   // Check if all torrents in group are selected
   const allSelected = group.torrents.every(torrent => selectedTorrents.has(torrent.hash))
-  const someSelected = group.torrents.some(torrent => selectedTorrents.has(torrent.hash))
 
   const handleGroupSelect = (checked: boolean) => {
     const hashes = group.torrents.map(t => t.hash)
@@ -117,9 +116,6 @@ export function TorrentGroupCard({
           <div className="flex items-start gap-3">
             <Checkbox
               checked={allSelected}
-              ref={(ref) => {
-                if (ref) ref.indeterminate = someSelected && !allSelected
-              }}
               onCheckedChange={handleGroupSelect}
               className="mt-1"
             />
@@ -231,7 +227,7 @@ export function TorrentGroupCard({
                           onCheckedChange={(checked: boolean) => onSelectTorrent(torrent.hash, checked)}
                         />
                         {index === 0 && (
-                          <Crown className="h-4 w-4 text-yellow-600" title="Best copy" />
+                          <Crown className="h-4 w-4 text-yellow-600" />
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm truncate" title={torrent.name}>

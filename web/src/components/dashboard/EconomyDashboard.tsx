@@ -499,7 +499,7 @@ export function EconomyDashboard({ analysis, instanceId, onPageChange }: Economy
             <div className="space-y-4">
               {displayGroups
                 .filter((group): group is TorrentGroup => 'torrents' in group && 'groupType' in group)
-                .map((group, groupIndex) => (
+                .map((group) => (
                   <TorrentGroupCard
                     group={group}
                     selectedTorrents={selectedTorrents}
