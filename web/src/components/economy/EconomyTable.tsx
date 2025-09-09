@@ -15,6 +15,11 @@ import {
 import { Input } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from "@/components/ui/tooltip"
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,7 +28,8 @@ import {
   TableRow
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
-import type { EconomyAnalysis } from "@/types"
+import { useIncognitoMode, getLinuxIsoName } from "@/lib/incognito"
+import type { EconomyAnalysis, EconomyScore } from "@/types"
 import {
   flexRender,
   getCoreRowModel,
@@ -33,10 +39,15 @@ import {
   type VisibilityState
 } from "@tanstack/react-table"
 import { useVirtualizer } from "@tanstack/react-virtual"
-import { Columns3, Loader2, RefreshCw, Search } from "lucide-react"
+import { Columns3, Eye, EyeOff, Loader2, RefreshCw, Search } from "lucide-react"
 import { useMemo, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { createEconomyColumns } from "./EconomyTableColumns"
+
+// Extended type for incognito mode
+type EconomyScoreWithOriginal = EconomyScore & {
+  originalName?: string
+}
 
 interface EconomyTableProps {
   instanceId: number
@@ -62,6 +73,7 @@ export function EconomyTable({
   onSortChange,
   onRefresh,
 }: EconomyTableProps) {
+  const [incognitoMode, setIncognitoMode] = useIncognitoMode()
   const [globalFilter, setGlobalFilter] = useState("")
   const [sorting, setSorting] = useState<SortingState>([
     { id: sortField, desc: sortOrder === "desc" },
@@ -95,18 +107,30 @@ export function EconomyTable({
   const columns = useMemo(() => createEconomyColumns(), [])
 
   // Get table data
-  const tableData = useMemo(() => {
+  const tableData = useMemo((): EconomyScoreWithOriginal[] => {
     if (!data?.reviewTorrents?.torrents) return []
+
+    let torrents: EconomyScoreWithOriginal[] = data.reviewTorrents.torrents
+
+    // Apply incognito mode transformations
+    if (incognitoMode) {
+      torrents = torrents.map(torrent => ({
+        ...torrent,
+        name: getLinuxIsoName(torrent.hash),
+        originalName: torrent.name, // Preserve original name for searching
+      }))
+    }
 
     // Apply client-side search filter if needed
     if (globalFilter) {
-      return data.reviewTorrents.torrents.filter((torrent) =>
-        torrent.name.toLowerCase().includes(globalFilter.toLowerCase())
-      )
+      return torrents.filter((torrent) => {
+        const searchName = incognitoMode && torrent.originalName ? torrent.originalName : torrent.name
+        return searchName.toLowerCase().includes(globalFilter.toLowerCase())
+      })
     }
 
-    return data.reviewTorrents.torrents
-  }, [data, globalFilter])
+    return torrents
+  }, [data, globalFilter, incognitoMode])
 
   const table = useReactTable({
     data: tableData,
@@ -193,6 +217,27 @@ export function EconomyTable({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Incognito mode toggle */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIncognitoMode(!incognitoMode)}
+                  className={cn(incognitoMode && "bg-muted")}
+                >
+                  {incognitoMode ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {incognitoMode ? "Exit incognito mode" : "Enable incognito mode"}
+              </TooltipContent>
+            </Tooltip>
+
             {/* Refresh button */}
             <Button
               variant="outline"
