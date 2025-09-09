@@ -57,7 +57,6 @@ type OptimizationOpportunity struct {
 	Savings     int64    `json:"savings"`  // Storage savings in bytes
 	Impact      float64  `json:"impact"`   // Impact score (0-100)
 	Torrents    []string `json:"torrents"` // Affected torrent hashes
-	Category    string   `json:"category"` // "storage", "seeding", "ratio"
 }
 
 // StorageOptimization represents storage-related optimization data
@@ -407,19 +406,8 @@ func (es *EconomyService) calculateRetentionScore(torrent qbt.Torrent, ageInDays
 		ratioFactor = 0.7 // Poor ratio
 	}
 
-	// Category factor: some categories should be retained longer
-	categoryFactor := 1.0
-	category := strings.ToLower(torrent.Category)
-	if strings.Contains(category, "movie") || strings.Contains(category, "tv") {
-		categoryFactor = 1.2 // Entertainment content
-	} else if strings.Contains(category, "music") || strings.Contains(category, "audio") {
-		categoryFactor = 1.1 // Music
-	} else if strings.Contains(category, "book") || strings.Contains(category, "documentary") {
-		categoryFactor = 1.3 // Educational/Documentary
-	}
-
-	// Calculate base retention score without seed factor
-	return baseRetention * ageFactor * activityBonus * ratioFactor * categoryFactor
+	// Calculate base retention score
+	return baseRetention * ageFactor * activityBonus * ratioFactor
 }
 
 // findDuplicates finds duplicate content based on name similarity only (bypassing file overlap for performance)
@@ -868,7 +856,6 @@ func (es *EconomyService) createDuplicateRemovalOpportunity(scores []EconomyScor
 		Savings:     totalSavings,
 		Impact:      85.0,
 		Torrents:    duplicateHashesToRemove,
-		Category:    "storage",
 	}
 }
 
@@ -897,7 +884,6 @@ func (es *EconomyService) createOldContentCleanupOpportunity(scores []EconomySco
 		Savings:     savings,
 		Impact:      75.0,
 		Torrents:    oldWellSeededHashes,
-		Category:    "storage",
 	}
 }
 
@@ -926,7 +912,6 @@ func (es *EconomyService) createRatioOptimizationOpportunity(scores []EconomySco
 		Savings:     savings,
 		Impact:      55.0,
 		Torrents:    lowRatioHashes,
-		Category:    "seeding",
 	}
 }
 
@@ -955,7 +940,6 @@ func (es *EconomyService) createUnusedContentOpportunity(scores []EconomyScore) 
 		Savings:     savings,
 		Impact:      75.0,
 		Torrents:    unusedHashes,
-		Category:    "storage",
 	}
 }
 
@@ -983,7 +967,6 @@ func (es *EconomyService) createLastSeedOpportunity(scores []EconomyScore) *Opti
 		Savings:     -lastSeedSize,
 		Impact:      100.0,
 		Torrents:    lastSeedHashes,
-		Category:    "preservation",
 	}
 }
 
@@ -1016,7 +999,6 @@ func (es *EconomyService) createHighValueOpportunity(scores []EconomyScore, dupl
 		Savings:     -highValueSize,
 		Impact:      95.0,
 		Torrents:    highValueHashes,
-		Category:    "seeding",
 	}
 }
 
