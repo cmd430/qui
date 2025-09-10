@@ -280,30 +280,30 @@ export function RacingDashboard() {
       {hasPremiumAccess && (
         <Card>
           <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
-            <CardHeader>
-              <CollapsibleTrigger asChild>
-                <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:opacity-80 transition-opacity">
+                <div className="flex items-center justify-between">
                   <div className="space-y-1 flex-1">
-                    <CardTitle className="flex gap-2">
+                    <CardTitle className="flex items-center gap-2">
                       <Filter className="h-5 w-5 text-primary" />
                       Filters
                     </CardTitle>
-                    <CardDescription className="pb-2">
+                    <CardDescription>
                       Configure filters to analyze specific conditions
                     </CardDescription>
                   </div>
                   <ChevronDown className={cn(
-                    "h-5 w-5 transition-transform duration-200 self-center",
+                    "h-5 w-5 transition-transform duration-200",
                     filtersOpen ? "" : "-rotate-90"
                   )} />
                 </div>
-              </CollapsibleTrigger>
-            </CardHeader>
+              </CardHeader>
+            </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-6">
                 {/* Basic Settings Section */}
                 <div className="space-y-4 pb-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
+                  <div className="flex items-center gap-2 mt-4 text-sm font-medium">
                     <Settings2 className="h-4 w-4 text-primary" />
                     Basic Settings
                   </div>
@@ -741,6 +741,59 @@ export function RacingDashboard() {
 
         {displayDashboard && (
           <>
+
+            {/* Tracker Statistics - Only show for premium users */}
+            {hasPremiumAccess && (
+              <Card className="mb-6 mb-2">
+                <CardHeader>
+                  <CardTitle>Tracker Statistics</CardTitle>
+                  <CardDescription>
+                    Overall performance metrics across all trackers
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div>
+                      <div className="text-2xl font-bold">{displayDashboard.trackerStats.totalTorrents}</div>
+                      <p className="text-xs text-muted-foreground">Total Torrents</p>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{displayDashboard.trackerStats.completedTorrents}</div>
+                      <p className="text-xs text-muted-foreground">Completed</p>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{displayDashboard.trackerStats.averageRatio.toFixed(2)}</div>
+                      <p className="text-xs text-muted-foreground">Average Ratio</p>
+                    </div>
+                    {displayDashboard.trackerStats.averageCompletionTime && (
+                      <div>
+                        <div className="text-2xl font-bold">
+                          {formatDuration(displayDashboard.trackerStats.averageCompletionTime)}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Avg Completion Time</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {Object.keys(displayDashboard.trackerStats.byTracker).length > 0 && (
+                    <>
+                      <Separator className="my-4" />
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold">Per Tracker Breakdown</h4>
+                        <DataTable
+                          columns={columnsTrackerStats}
+                          data={trackerStatsTableData}
+                          searchColumn="tracker"
+                          searchPlaceholder="Search trackers..."
+                          pageSize={DEFAULT_TRACKER_STATS_PAGE_SIZE}
+                        />
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Racing Tables Tabs - Only show for premium users */}
             {hasPremiumAccess && (
               <Card className="mb-6">
@@ -899,58 +952,6 @@ export function RacingDashboard() {
                 </Tabs>
               </CardContent>
             </Card>
-
-            {/* Tracker Statistics - Only show for premium users */}
-            {hasPremiumAccess && (
-              <Card className="mt-6 mb-2">
-                <CardHeader>
-                  <CardTitle>Tracker Statistics</CardTitle>
-                  <CardDescription>
-                    Overall performance metrics across all trackers
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div>
-                      <div className="text-2xl font-bold">{displayDashboard.trackerStats.totalTorrents}</div>
-                      <p className="text-xs text-muted-foreground">Total Torrents</p>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{displayDashboard.trackerStats.completedTorrents}</div>
-                      <p className="text-xs text-muted-foreground">Completed</p>
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold">{displayDashboard.trackerStats.averageRatio.toFixed(2)}</div>
-                      <p className="text-xs text-muted-foreground">Average Ratio</p>
-                    </div>
-                    {displayDashboard.trackerStats.averageCompletionTime && (
-                      <div>
-                        <div className="text-2xl font-bold">
-                          {formatDuration(displayDashboard.trackerStats.averageCompletionTime)}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Avg Completion Time</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {Object.keys(displayDashboard.trackerStats.byTracker).length > 0 && (
-                    <>
-                      <Separator className="my-4" />
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-semibold">Per Tracker Breakdown</h4>
-                        <DataTable
-                          columns={columnsTrackerStats}
-                          data={trackerStatsTableData}
-                          searchColumn="tracker"
-                          searchPlaceholder="Search trackers..."
-                          pageSize={DEFAULT_TRACKER_STATS_PAGE_SIZE}
-                        />
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {/* Last Updated - Only show for premium users */}
             {hasPremiumAccess && (
