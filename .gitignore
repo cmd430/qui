@@ -63,3 +63,4 @@ output/*
 
 web/src/themes/premium/*
 docs/*
+components.json
