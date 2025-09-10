@@ -832,67 +832,71 @@ export function RacingDashboard() {
             )}
 
             {/* Performance Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              {/* Completion Time Trends */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <LineChart className="h-5 w-5 text-primary" />
-                    Completion Time Trends
-                  </CardTitle>
-                  <CardDescription>
-                    Average completion times over time
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CompletionTimeChart
-                    data={[
-                      ...(displayDashboard.topFastest || []),
-                      ...(displayDashboard.topRatios || []),
-                      ...(displayDashboard.bottomRatios || []),
-                    ]}
-                    timeRange={options.timeRange || "7d"}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Upload/Download Volume */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    Data Transfer Volume
-                  </CardTitle>
-                  <CardDescription>
-                    Upload and download volume over time
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <VolumeChart
-                    data={[
-                      ...(displayDashboard.topFastest || []),
-                      ...(displayDashboard.topRatios || []),
-                      ...(displayDashboard.bottomRatios || []),
-                    ]}
-                    timeRange={options.timeRange || "7d"}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Tracker Performance Comparison - Full Width */}
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  Tracker Performance Comparison
-                </CardTitle>
+                <CardTitle>Performance Analytics</CardTitle>
                 <CardDescription>
-                  Compare performance metrics across trackers
+                  Visual analysis of torrent performance metrics
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TrackerPerformanceChart data={trackerStatsTableData} />
+                <Tabs defaultValue="completion-trends" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="completion-trends" className="flex items-center gap-2">
+                      <LineChart className="h-4 w-4 text-primary" />
+                      Completion Trends
+                    </TabsTrigger>
+                    <TabsTrigger value="data-volume" className="flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-primary" />
+                      Data Volume
+                    </TabsTrigger>
+                    <TabsTrigger value="tracker-performance" className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-primary" />
+                      Tracker Performance
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="completion-trends" className="mt-4">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Average completion times over time
+                      </p>
+                      <CompletionTimeChart
+                        data={[
+                          ...(displayDashboard.topFastest || []),
+                          ...(displayDashboard.topRatios || []),
+                          ...(displayDashboard.bottomRatios || []),
+                        ]}
+                        timeRange={options.timeRange || "7d"}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="data-volume" className="mt-4">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Upload and download volume over time
+                      </p>
+                      <VolumeChart
+                        data={[
+                          ...(displayDashboard.topFastest || []),
+                          ...(displayDashboard.topRatios || []),
+                          ...(displayDashboard.bottomRatios || []),
+                        ]}
+                        timeRange={options.timeRange || "7d"}
+                      />
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="tracker-performance" className="mt-4">
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Compare performance metrics across trackers
+                      </p>
+                      <TrackerPerformanceChart data={trackerStatsTableData} />
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
 
