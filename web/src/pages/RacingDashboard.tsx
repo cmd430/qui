@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { PremiumLockedOverlay } from "@/components/premium/PremiumLockedOverlay"
+import { RacingPremiumOverlay } from "@/components/premium/RacingPremiumOverlay"
 import { CompletionTimeChart } from "@/components/racing/charts/CompletionTimeChart"
 import { TrackerPerformanceChart } from "@/components/racing/charts/TrackerPerformanceChart"
 import { VolumeChart } from "@/components/racing/charts/VolumeChart"
@@ -733,7 +733,7 @@ export function RacingDashboard() {
       {/* Premium content wrapper */}
       <div className="relative">
         {!hasPremiumAccess && (
-          <PremiumLockedOverlay
+          <RacingPremiumOverlay
             title="Racing Dashboard"
             description="Track performance metrics, analyze completion times, and monitor racing statistics across all your instances"
           />

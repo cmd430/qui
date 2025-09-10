@@ -6,18 +6,19 @@
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Lock, ShoppingCart, Sparkles } from "lucide-react"
+import { POLAR_PURCHASE_URL } from "./constants"
 
-interface PremiumLockedOverlayProps {
+interface RacingPremiumOverlayProps {
   title?: string
   description?: string
   className?: string
 }
 
-export function PremiumLockedOverlay({
+export function RacingPremiumOverlay({
   title = "Premium Feature",
   description = "Unlock this feature with a premium license",
   className,
-}: PremiumLockedOverlayProps) {
+}: RacingPremiumOverlayProps) {
   return (
     <>
       {/* Blur overlay that covers the entire parent with bleeding edges */}
@@ -44,7 +45,7 @@ export function PremiumLockedOverlay({
           <div className="space-y-3">
             <Button size="lg" asChild>
               <a
-                href="https://buy.polar.sh/polar_cl_yyXJesVM9pFVfAPIplspbfCukgVgXzXjXIc2N0I8WcL"
+                href={POLAR_PURCHASE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
               >
