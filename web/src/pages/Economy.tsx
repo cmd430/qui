@@ -3,20 +3,24 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { useState, useCallback } from "react"
 import { EconomyTable } from "@/components/economy/EconomyTable"
+import { EconomyPremiumOverlay } from "@/components/premium/EconomyPremiumOverlay"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useInstances } from "@/hooks/useInstances"
-import { formatBytes } from "@/lib/utils"
-import { useQuery } from "@tanstack/react-query"
+import { useHasPremiumAccess } from "@/hooks/useThemeLicense"
 import { api } from "@/lib/api"
-import { Loader2, TrendingDown, TrendingUp, HardDrive, Package, Info } from "lucide-react"
+import { generateFakeEconomyData, generateFakeEconomyStats } from "@/lib/fakeEconomyData"
+import { formatBytes } from "@/lib/utils"
 import type { FilterOptions } from "@/types"
+import { useQuery } from "@tanstack/react-query"
+import { HardDrive, Info, Loader2, Package, TrendingDown, TrendingUp } from "lucide-react"
+import { useCallback, useState } from "react"
 
 export function Economy() {
   const { instances, isLoading: instancesLoading } = useInstances()
+  const { hasPremiumAccess, isLoading: premiumLoading } = useHasPremiumAccess()
   const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null)
   const [filters, setFilters] = useState<FilterOptions>({
     status: [],
@@ -36,6 +40,10 @@ export function Economy() {
     }
   })
 
+  // Generate fake data for non-premium users
+  const fakeEconomyData = generateFakeEconomyData()
+  const fakeStats = generateFakeEconomyStats()
+
   // Fetch economy data
   const { data: economyData, isLoading: economyLoading, refetch } = useQuery({
     queryKey: ["economy", selectedInstanceId, currentPage, pageSize, sortField, sortOrder, filters],
@@ -50,8 +58,8 @@ export function Economy() {
         filters
       )
     },
-    enabled: !!selectedInstanceId,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: !!selectedInstanceId && hasPremiumAccess,
+    refetchInterval: hasPremiumAccess ? 30000 : false, // Only refresh if premium
   })
 
   // Fetch economy stats
@@ -61,8 +69,8 @@ export function Economy() {
       if (!selectedInstanceId) return null
       return api.getEconomyStats(selectedInstanceId)
     },
-    enabled: !!selectedInstanceId,
-    refetchInterval: 60000, // Refresh every minute
+    enabled: !!selectedInstanceId && hasPremiumAccess,
+    refetchInterval: hasPremiumAccess ? 60000 : false, // Only refresh if premium
   })
 
   const handleInstanceChange = useCallback((value: string) => {
@@ -87,7 +95,7 @@ export function Economy() {
     setCurrentPage(1) // Reset to first page when filtering
   }, [])
 
-  if (instancesLoading) {
+  if (instancesLoading || premiumLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -109,12 +117,17 @@ export function Economy() {
     setSelectedInstanceId(instances[0].id)
   }
 
-  const stats = statsData || economyData?.stats
+  // Use fake data if no premium access, otherwise use real data
+  const stats = hasPremiumAccess ? (statsData || economyData?.stats) : fakeStats
+  const displayData = hasPremiumAccess ? economyData : fakeEconomyData
+  const isLoading = hasPremiumAccess ? economyLoading : false
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {!hasPremiumAccess && <EconomyPremiumOverlay />}
+
       {/* Header */}
-      <div className="flex-shrink-0 border-b bg-background">
+      <div className={`flex-shrink-0 border-b bg-background ${!hasPremiumAccess ? "blur-sm" : ""}`}>
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -253,12 +266,12 @@ export function Economy() {
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-hidden">
+      <div className={`flex-1 overflow-hidden ${!hasPremiumAccess ? "blur-sm" : ""}`}>
         {selectedInstanceId && (
           <EconomyTable
             instanceId={selectedInstanceId}
-            data={economyData}
-            isLoading={economyLoading}
+            data={displayData}
+            isLoading={isLoading}
             filters={filters}
             onFilterChange={handleFilterChange}
             currentPage={currentPage}
