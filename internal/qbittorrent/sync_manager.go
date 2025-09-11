@@ -1694,18 +1694,19 @@ func (sm *SyncManager) SetAppPreferences(ctx context.Context, instanceID int, pr
 }
 
 // GetAlternativeSpeedLimitsMode gets whether alternative speed limits are currently active
+// Uses cached data from sync manager for better performance
 func (sm *SyncManager) GetAlternativeSpeedLimitsMode(ctx context.Context, instanceID int) (bool, error) {
-	client, err := sm.clientPool.GetClient(ctx, instanceID)
+	// Get sync manager which has cached server state
+	_, syncManager, err := sm.getClientAndSyncManager(ctx, instanceID)
 	if err != nil {
-		return false, fmt.Errorf("failed to get client: %w", err)
+		return false, fmt.Errorf("failed to get sync manager: %w", err)
 	}
 
-	enabled, err := client.GetAlternativeSpeedLimitsModeCtx(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get alternative speed limits mode: %w", err)
-	}
+	// Get server state from cached sync data
+	serverState := syncManager.GetServerState()
 
-	return enabled, nil
+	// Return the cached alternative speed limits status
+	return serverState.UseAltSpeedLimits, nil
 }
 
 // ToggleAlternativeSpeedLimits toggles alternative speed limits on/off

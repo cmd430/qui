@@ -99,7 +99,7 @@ function InstanceCard({
     retryDelay: 1000,
   })
 
-  const { enabled: altSpeedEnabled, toggle: toggleAltSpeed, isToggling } = useAlternativeSpeedLimits(instance.id)
+  const { toggle: toggleAltSpeed, isToggling } = useAlternativeSpeedLimits(instance.id)
   const [incognitoMode, setIncognitoMode] = useIncognitoMode()
   const [speedUnit] = useSpeedUnits()
   const displayUrl = instance.host
@@ -108,6 +108,9 @@ function InstanceCard({
   const stats = torrentData?.stats
   const torrentCounts = torrentData?.counts
   const serverState = torrentData?.serverState
+
+  // Get alternative speed limits status from cached ServerState
+  const altSpeedEnabled = serverState?.use_alt_speed_limits ?? false
 
   // Determine card state
   const isFirstLoad = isLoading && !stats
