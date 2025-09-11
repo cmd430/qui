@@ -78,46 +78,64 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
   const [showBanPeerDialog, setShowBanPeerDialog] = useState(false)
   const [peersToAdd, setPeersToAdd] = useState("")
   const [peerToBan, setPeerToBan] = useState<TorrentPeer | null>(null)
+  const [isReady, setIsReady] = useState(false)
   const { data: metadata } = useInstanceMetadata(instanceId)
   const queryClient = useQueryClient()
   const [speedUnit] = useSpeedUnits()
 
-  // Reset tab when torrent changes
+  // Reset tab when torrent changes and wait for component to be ready
   useEffect(() => {
     setActiveTab("general")
+    setIsReady(false)
+    // Small delay to ensure parent component animations complete
+    const timer = setTimeout(() => setIsReady(true), 150)
+    return () => clearTimeout(timer)
   }, [torrent?.hash])
 
   // Fetch torrent properties
   const { data: properties, isLoading: loadingProperties } = useQuery({
     queryKey: ["torrent-properties", instanceId, torrent?.hash],
     queryFn: () => api.getTorrentProperties(instanceId, torrent!.hash),
-    enabled: !!torrent,
+    enabled: !!torrent && isReady,
+    staleTime: 30000, // Cache for 30 seconds
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
   })
 
   // Fetch torrent trackers
   const { data: trackers, isLoading: loadingTrackers } = useQuery({
     queryKey: ["torrent-trackers", instanceId, torrent?.hash],
     queryFn: () => api.getTorrentTrackers(instanceId, torrent!.hash),
-    enabled: !!torrent && activeTab === "trackers",
+    enabled: !!torrent && isReady, // Fetch immediately, don't wait for tab
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000,
   })
 
   // Fetch torrent files
   const { data: files, isLoading: loadingFiles } = useQuery({
     queryKey: ["torrent-files", instanceId, torrent?.hash],
     queryFn: () => api.getTorrentFiles(instanceId, torrent!.hash),
-    enabled: !!torrent && activeTab === "content",
+    enabled: !!torrent && isReady, // Fetch immediately, don't wait for tab
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000,
   })
 
-  // Fetch torrent peers
+  // Fetch torrent peers with optimized refetch
   const { data: peersData, isLoading: loadingPeers } = useQuery<TorrentPeersResponse>({
     queryKey: ["torrent-peers", instanceId, torrent?.hash],
     queryFn: async () => {
       const data = await api.getTorrentPeers(instanceId, torrent!.hash)
-      console.log("Peers data received:", data)
       return data as TorrentPeersResponse
     },
-    enabled: !!torrent && activeTab === "peers",
-    refetchInterval: activeTab === "peers" ? 2000 : false, // Auto-refresh every 2 seconds when peers tab is active
+    enabled: !!torrent && isReady,
+    // Only refetch when tab is active and document is visible
+    refetchInterval: () => {
+      if (activeTab === "peers" && document.visibilityState === "visible" && isReady) {
+        return 2000
+      }
+      return false
+    },
+    staleTime: activeTab === "peers" ? 0 : 30000, // No stale time when viewing peers
+    gcTime: 5 * 60 * 1000,
   })
 
   // Add peers mutation
@@ -187,6 +205,16 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
 
   if (!torrent) return null
 
+  // Show minimal loading state while waiting for initial data
+  const isInitialLoad = !isReady || (loadingProperties && !properties)
+  if (isInitialLoad) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 sm:px-6 border-b bg-muted/30">
@@ -227,7 +255,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
           <TabsContent value="general" className="m-0 h-full">
             <ScrollArea className="h-full">
               <div className="p-4 sm:p-6">
-                {loadingProperties ? (
+                {loadingProperties && !properties ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
@@ -375,7 +403,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
           <TabsContent value="trackers" className="m-0 h-full">
             <ScrollArea className="h-full">
               <div className="p-4 sm:p-6">
-                {loadingTrackers ? (
+                {activeTab === "trackers" && loadingTrackers && !trackers ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
@@ -411,7 +439,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
           <TabsContent value="peers" className="m-0 h-full">
             <ScrollArea className="h-full">
               <div className="p-4 sm:p-6">
-                {loadingPeers ? (
+                {activeTab === "peers" && loadingPeers && !peersData ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
@@ -489,7 +517,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
           <TabsContent value="content" className="m-0 h-full">
             <ScrollArea className="h-full">
               <div className="p-4 sm:p-6">
-                {loadingFiles ? (
+                {activeTab === "content" && loadingFiles && !files ? (
                   <div className="flex items-center justify-center p-8">
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
