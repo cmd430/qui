@@ -178,7 +178,7 @@ func (rm *RacingManager) convertToRacingTorrentsWithInstance(torrents []qbt.Torr
 
 		// Extract tracker domain
 		if torrent.Tracker != "" {
-			racingTorrent.TrackerDomain = rm.syncManager.getDomainFromTracker(torrent.Tracker)
+			racingTorrent.TrackerDomain = rm.syncManager.extractDomainFromURL(torrent.Tracker)
 		}
 
 		// Calculate completion time if torrent is completed
@@ -234,7 +234,7 @@ func (rm *RacingManager) matchesFilters(torrent qbt.Torrent, options RacingDashb
 
 	// Tracker filter
 	if len(options.TrackerFilter) > 0 {
-		trackerDomain := rm.syncManager.getDomainFromTracker(torrent.Tracker)
+		trackerDomain := rm.syncManager.extractDomainFromURL(torrent.Tracker)
 		found := false
 		for _, tracker := range options.TrackerFilter {
 			if trackerDomain == tracker || torrent.Tracker == tracker {
