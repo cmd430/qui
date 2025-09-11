@@ -544,21 +544,24 @@ func (sm *SyncManager) GetTorrentTrackers(ctx context.Context, instanceID int, h
 	return trackers, nil
 }
 
-// GetTorrentPeers gets peers for a specific torrent
-func (sm *SyncManager) GetTorrentPeers(ctx context.Context, instanceID int, hash string, rid int64) (*qbt.TorrentPeersResponse, error) {
-	// Get client and sync manager
-	client, _, err := sm.getClientAndSyncManager(ctx, instanceID)
+// GetTorrentPeers gets peers for a specific torrent with incremental updates
+func (sm *SyncManager) GetTorrentPeers(ctx context.Context, instanceID int, hash string) (*qbt.TorrentPeersResponse, error) {
+	// Get client
+	clientWrapper, err := sm.clientPool.GetClient(ctx, instanceID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 
-	// Get torrent peers
-	peers, err := client.GetTorrentPeersCtx(ctx, hash, rid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get torrent peers: %w", err)
+	// Get or create peer sync manager for this torrent
+	peerSync := clientWrapper.GetOrCreatePeerSyncManager(hash)
+
+	// Sync to get latest peer data
+	if err := peerSync.Sync(ctx); err != nil {
+		return nil, fmt.Errorf("failed to sync torrent peers: %w", err)
 	}
 
-	return peers, nil
+	// Return the current peer data (already merged with incremental updates)
+	return peerSync.GetPeers(), nil
 }
 
 // GetTorrentFiles gets files information for a specific torrent

@@ -259,8 +259,8 @@ class ApiClient {
     return this.request(`/instances/${instanceId}/torrents/${hash}/files`)
   }
 
-  async getTorrentPeers(instanceId: number, hash: string, rid: number = 0): Promise<any> {
-    return this.request(`/instances/${instanceId}/torrents/${hash}/peers?rid=${rid}`)
+  async getTorrentPeers(instanceId: number, hash: string): Promise<any> {
+    return this.request(`/instances/${instanceId}/torrents/${hash}/peers`)
   }
 
   async addPeersToTorrents(instanceId: number, hashes: string[], peers: string[]): Promise<void> {

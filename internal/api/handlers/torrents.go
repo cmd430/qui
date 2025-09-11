@@ -778,16 +778,8 @@ func (h *TorrentsHandler) GetTorrentPeers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Get rid parameter if provided
-	rid := int64(0)
-	if ridStr := r.URL.Query().Get("rid"); ridStr != "" {
-		if parsed, err := strconv.ParseInt(ridStr, 10, 64); err == nil {
-			rid = parsed
-		}
-	}
-
-	// Get peers
-	peers, err := h.syncManager.GetTorrentPeers(r.Context(), instanceID, hash, rid)
+	// Get peers (backend handles incremental updates internally)
+	peers, err := h.syncManager.GetTorrentPeers(r.Context(), instanceID, hash)
 	if err != nil {
 		log.Error().Err(err).Int("instanceID", instanceID).Str("hash", hash).Msg("Failed to get torrent peers")
 		RespondError(w, http.StatusInternalServerError, "Failed to get torrent peers")
@@ -795,10 +787,9 @@ func (h *TorrentsHandler) GetTorrentPeers(w http.ResponseWriter, r *http.Request
 	}
 
 	// Debug logging
-	log.Debug().
+	log.Trace().
 		Int("instanceID", instanceID).
 		Str("hash", hash).
-		Int64("rid", rid).
 		Interface("peers", peers).
 		Msg("Torrent peers response")
 
