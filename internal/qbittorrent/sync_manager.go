@@ -535,6 +535,23 @@ func (sm *SyncManager) GetTorrentTrackers(ctx context.Context, instanceID int, h
 	return trackers, nil
 }
 
+// GetTorrentPeers gets peers for a specific torrent
+func (sm *SyncManager) GetTorrentPeers(ctx context.Context, instanceID int, hash string, rid int64) (*qbt.TorrentPeersResponse, error) {
+	// Get client and sync manager
+	client, _, err := sm.getClientAndSyncManager(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get torrent peers
+	peers, err := client.GetTorrentPeersCtx(ctx, hash, rid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get torrent peers: %w", err)
+	}
+
+	return peers, nil
+}
+
 // GetTorrentFiles gets files information for a specific torrent
 func (sm *SyncManager) GetTorrentFiles(ctx context.Context, instanceID int, hash string) (*qbt.TorrentFiles, error) {
 	// Get client and sync manager

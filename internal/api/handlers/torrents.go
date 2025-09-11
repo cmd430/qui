@@ -764,6 +764,47 @@ func (h *TorrentsHandler) GetTorrentTrackers(w http.ResponseWriter, r *http.Requ
 }
 
 // GetTorrentFiles returns files information for a specific torrent
+func (h *TorrentsHandler) GetTorrentPeers(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID and hash from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	hash := chi.URLParam(r, "hash")
+	if hash == "" {
+		RespondError(w, http.StatusBadRequest, "Torrent hash is required")
+		return
+	}
+
+	// Get rid parameter if provided
+	rid := int64(0)
+	if ridStr := r.URL.Query().Get("rid"); ridStr != "" {
+		if parsed, err := strconv.ParseInt(ridStr, 10, 64); err == nil {
+			rid = parsed
+		}
+	}
+
+	// Get peers
+	peers, err := h.syncManager.GetTorrentPeers(r.Context(), instanceID, hash, rid)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Str("hash", hash).Msg("Failed to get torrent peers")
+		RespondError(w, http.StatusInternalServerError, "Failed to get torrent peers")
+		return
+	}
+
+	// Debug logging
+	log.Debug().
+		Int("instanceID", instanceID).
+		Str("hash", hash).
+		Int64("rid", rid).
+		Interface("peers", peers).
+		Msg("Torrent peers response")
+
+	RespondJSON(w, http.StatusOK, peers)
+}
+
 func (h *TorrentsHandler) GetTorrentFiles(w http.ResponseWriter, r *http.Request) {
 	// Get instance ID and hash from URL
 	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))

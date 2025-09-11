@@ -14,6 +14,34 @@ import { Loader2 } from "lucide-react"
 import { api } from "@/lib/api"
 import type { Torrent } from "@/types"
 import { formatBytes, formatSpeed, formatTimestamp, formatDuration } from "@/lib/utils"
+import "flag-icons/css/flag-icons.min.css"
+
+interface TorrentPeer {
+  ip: string
+  port: number
+  connection?: string
+  flags?: string
+  flags_desc?: string
+  client?: string
+  progress?: number
+  dl_speed?: number
+  up_speed?: number
+  downloaded?: number
+  uploaded?: number
+  relevance?: number
+  files?: string
+  country?: string
+  country_code?: string
+  peer_id_client?: string
+}
+
+interface TorrentPeersResponse {
+  full_update?: boolean
+  rid?: number
+  peers?: Record<string, TorrentPeer>
+  peers_removed?: string[]
+  show_flags?: boolean
+}
 
 interface TorrentDetailsPanelProps {
   instanceId: number;
@@ -67,6 +95,18 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
     enabled: !!torrent && activeTab === "content",
   })
 
+  // Fetch torrent peers
+  const { data: peersData, isLoading: loadingPeers } = useQuery<TorrentPeersResponse>({
+    queryKey: ["torrent-peers", instanceId, torrent?.hash],
+    queryFn: async () => {
+      const data = await api.getTorrentPeers(instanceId, torrent!.hash)
+      console.log("Peers data received:", data)
+      return data as TorrentPeersResponse
+    },
+    enabled: !!torrent && activeTab === "peers",
+    refetchInterval: activeTab === "peers" ? 2000 : false, // Auto-refresh every 2 seconds when peers tab is active
+  })
+
   if (!torrent) return null
 
   return (
@@ -90,6 +130,12 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
             className="relative text-xs rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:bg-accent/50 transition-all px-3 sm:px-4 cursor-pointer focus-visible:outline-none focus-visible:ring-0 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
           >
             Trackers
+          </TabsTrigger>
+          <TabsTrigger
+            value="peers"
+            className="relative text-xs rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:bg-accent/50 transition-all px-3 sm:px-4 cursor-pointer focus-visible:outline-none focus-visible:ring-0 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-primary after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+          >
+            Peers
           </TabsTrigger>
           <TabsTrigger
             value="content"
@@ -278,6 +324,52 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
                 ) : (
                   <div className="text-sm text-muted-foreground text-center p-4">
                     No trackers found
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="peers" className="m-0 h-full">
+            <ScrollArea className="h-full">
+              <div className="p-4 sm:p-6">
+                {loadingPeers ? (
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : peersData && peersData.peers && typeof peersData.peers === "object" && Object.keys(peersData.peers).length > 0 ? (
+                  <div className="space-y-2">
+                    {Object.entries(peersData.peers).map(([peerKey, peer]) => (
+                      <div key={peerKey} className="border border-border/50 hover:border-border bg-card/50 hover:bg-card transition-all rounded-lg p-3 sm:p-4 space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs sm:text-sm font-mono">{peer.ip}:{peer.port}</span>
+                            {peer.country_code && (
+                              <span
+                                className={`fi fi-${peer.country_code.toLowerCase()} rounded text-xs`}
+                                title={peer.country || peer.country_code}
+                              />
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground">{peer.client || "Unknown"}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                          <div>Progress: {Math.round((peer.progress || 0) * 100)}%</div>
+                          <div>Connection: {peer.connection || "N/A"}</div>
+                          <div>DL: {formatSpeed(peer.dl_speed || 0)}</div>
+                          <div>UL: {formatSpeed(peer.up_speed || 0)}</div>
+                          <div>Downloaded: {formatBytes(peer.downloaded || 0)}</div>
+                          <div>Uploaded: {formatBytes(peer.uploaded || 0)}</div>
+                        </div>
+                        {peer.flags && (
+                          <div className="text-xs text-muted-foreground">Flags: {peer.flags}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground text-center p-4">
+                    No peers connected
                   </div>
                 )}
               </div>
