@@ -4,13 +4,14 @@
  */
 
 import { Footer } from "@/components/Footer"
+import { BlurFade } from "@/components/magicui/blur-fade"
+import { ShineBorder } from "@/components/magicui/shine-border"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Logo } from "@/components/ui/Logo"
-import { ShineBorder } from "@/components/magicui/shine-border"
-import { BlurFade } from "@/components/magicui/blur-fade"
 import { useAuth } from "@/hooks/useAuth"
 import { api } from "@/lib/api"
 import { useForm } from "@tanstack/react-form"
@@ -34,6 +35,7 @@ export function Login() {
     defaultValues: {
       username: "",
       password: "",
+      rememberMe: true,
     },
     onSubmit: async ({ value }) => {
       login(value)
@@ -111,6 +113,24 @@ export function Login() {
                   </div>
                 )}
               </form.Field>
+
+            <form.Field name="rememberMe">
+              {(field) => (
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(checked) => field.handleChange(checked === true)}
+                  />
+                  <Label
+                    htmlFor={field.name}
+                    className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Remember me
+                  </Label>
+                </div>
+              )}
+            </form.Field>
 
               {loginError && (
                 <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md text-sm">
