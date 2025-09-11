@@ -14,7 +14,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useInstanceMetadata } from "@/hooks/useInstanceMetadata"
 import { api } from "@/lib/api"
-import { formatBytes, formatDuration, formatSpeed, formatTimestamp } from "@/lib/utils"
+import { formatSpeedWithUnit, useSpeedUnits } from "@/lib/speedUnits"
+import { formatBytes, formatDuration, formatTimestamp } from "@/lib/utils"
 import type { Torrent } from "@/types"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import "flag-icons/css/flag-icons.min.css"
@@ -79,6 +80,7 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
   const [peerToBan, setPeerToBan] = useState<TorrentPeer | null>(null)
   const { data: metadata } = useInstanceMetadata(instanceId)
   const queryClient = useQueryClient()
+  const [speedUnit] = useSpeedUnits()
 
   // Reset tab when torrent changes
   useEffect(() => {
@@ -269,11 +271,11 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
                     <div className="space-y-2">
                       <div>
                         <span className="text-sm text-muted-foreground">Download Speed:</span>
-                        <span className="ml-2 text-sm">{formatSpeed(properties.dl_speed || 0)} (avg: {formatSpeed(properties.dl_speed_avg || 0)})</span>
+                        <span className="ml-2 text-sm">{formatSpeedWithUnit(properties.dl_speed || 0, speedUnit)} (avg: {formatSpeedWithUnit(properties.dl_speed_avg || 0, speedUnit)})</span>
                       </div>
                       <div>
                         <span className="text-sm text-muted-foreground">Upload Speed:</span>
-                        <span className="ml-2 text-sm">{formatSpeed(properties.up_speed || 0)} (avg: {formatSpeed(properties.up_speed_avg || 0)})</span>
+                        <span className="ml-2 text-sm">{formatSpeedWithUnit(properties.up_speed || 0, speedUnit)} (avg: {formatSpeedWithUnit(properties.up_speed_avg || 0, speedUnit)})</span>
                       </div>
                     </div>
 
@@ -445,8 +447,8 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
                               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                                 <div>Progress: {Math.round((peer.progress || 0) * 100)}%</div>
                                 <div>Connection: {peer.connection || "N/A"}</div>
-                                <div>DL: {formatSpeed(peer.dl_speed || 0)}</div>
-                                <div>UL: {formatSpeed(peer.up_speed || 0)}</div>
+                                <div>DL: {formatSpeedWithUnit(peer.dl_speed || 0, speedUnit)}</div>
+                                <div>UL: {formatSpeedWithUnit(peer.up_speed || 0, speedUnit)}</div>
                                 <div>Downloaded: {formatBytes(peer.downloaded || 0)}</div>
                                 <div>Uploaded: {formatBytes(peer.uploaded || 0)}</div>
                               </div>
