@@ -263,6 +263,20 @@ class ApiClient {
     return this.request(`/instances/${instanceId}/torrents/${hash}/peers?rid=${rid}`)
   }
 
+  async addPeersToTorrents(instanceId: number, hashes: string[], peers: string[]): Promise<void> {
+    return this.request(`/instances/${instanceId}/torrents/add-peers`, {
+      method: "POST",
+      body: JSON.stringify({ hashes, peers }),
+    })
+  }
+
+  async banPeers(instanceId: number, peers: string[]): Promise<void> {
+    return this.request(`/instances/${instanceId}/torrents/ban-peers`, {
+      method: "POST",
+      body: JSON.stringify({ peers }),
+    })
+  }
+
   // Categories & Tags
   async getCategories(instanceId: number): Promise<Record<string, Category>> {
     return this.request(`/instances/${instanceId}/categories`)

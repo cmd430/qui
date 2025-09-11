@@ -1668,6 +1668,42 @@ func (sm *SyncManager) SetAppPreferences(ctx context.Context, instanceID int, pr
 	return nil
 }
 
+// AddPeersToTorrents adds peers to the specified torrents
+func (sm *SyncManager) AddPeersToTorrents(ctx context.Context, instanceID int, hashes []string, peers []string) error {
+	client, err := sm.clientPool.GetClient(ctx, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+
+	// Add peers using the qBittorrent client
+	if err := client.AddPeersForTorrentsCtx(ctx, hashes, peers); err != nil {
+		return fmt.Errorf("failed to add peers: %w", err)
+	}
+
+	// Sync after modification
+	sm.syncAfterModification(instanceID, client, "add_peers")
+
+	return nil
+}
+
+// BanPeers bans the specified peers permanently
+func (sm *SyncManager) BanPeers(ctx context.Context, instanceID int, peers []string) error {
+	client, err := sm.clientPool.GetClient(ctx, instanceID)
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+
+	// Ban peers using the qBittorrent client
+	if err := client.BanPeersCtx(ctx, peers); err != nil {
+		return fmt.Errorf("failed to ban peers: %w", err)
+	}
+
+	// Sync after modification
+	sm.syncAfterModification(instanceID, client, "ban_peers")
+
+	return nil
+}
+
 // GetAlternativeSpeedLimitsMode gets whether alternative speed limits are currently active
 func (sm *SyncManager) GetAlternativeSpeedLimitsMode(ctx context.Context, instanceID int) (bool, error) {
 	client, err := sm.clientPool.GetClient(ctx, instanceID)

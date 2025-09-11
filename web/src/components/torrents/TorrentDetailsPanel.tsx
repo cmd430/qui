@@ -3,18 +3,24 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
-import { memo, useState, useEffect } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { useInstanceMetadata } from "@/hooks/useInstanceMetadata"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { Loader2 } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { useInstanceMetadata } from "@/hooks/useInstanceMetadata"
 import { api } from "@/lib/api"
+import { formatBytes, formatDuration, formatSpeed, formatTimestamp } from "@/lib/utils"
 import type { Torrent } from "@/types"
-import { formatBytes, formatSpeed, formatTimestamp, formatDuration } from "@/lib/utils"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import "flag-icons/css/flag-icons.min.css"
+import { Ban, Copy, Loader2, UserPlus } from "lucide-react"
+import { memo, useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 interface TorrentPeer {
   ip: string
@@ -67,7 +73,12 @@ function getTrackerStatusBadge(status: number) {
 
 export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceId, torrent }: TorrentDetailsPanelProps) {
   const [activeTab, setActiveTab] = useState("general")
+  const [showAddPeersDialog, setShowAddPeersDialog] = useState(false)
+  const [showBanPeerDialog, setShowBanPeerDialog] = useState(false)
+  const [peersToAdd, setPeersToAdd] = useState("")
+  const [peerToBan, setPeerToBan] = useState<TorrentPeer | null>(null)
   const { data: metadata } = useInstanceMetadata(instanceId)
+  const queryClient = useQueryClient()
 
   // Reset tab when torrent changes
   useEffect(() => {
@@ -106,6 +117,71 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
     enabled: !!torrent && activeTab === "peers",
     refetchInterval: activeTab === "peers" ? 2000 : false, // Auto-refresh every 2 seconds when peers tab is active
   })
+
+  // Add peers mutation
+  const addPeersMutation = useMutation({
+    mutationFn: async (peers: string[]) => {
+      if (!torrent) throw new Error("No torrent selected")
+      await api.addPeersToTorrents(instanceId, [torrent.hash], peers)
+    },
+    onSuccess: () => {
+      toast.success("Peers added successfully")
+      setShowAddPeersDialog(false)
+      setPeersToAdd("")
+      queryClient.invalidateQueries({ queryKey: ["torrent-peers", instanceId, torrent?.hash] })
+    },
+    onError: (error) => {
+      toast.error(`Failed to add peers: ${error.message}`)
+    },
+  })
+
+  // Ban peer mutation
+  const banPeerMutation = useMutation({
+    mutationFn: async (peer: string) => {
+      await api.banPeers(instanceId, [peer])
+    },
+    onSuccess: () => {
+      toast.success("Peer banned successfully")
+      setShowBanPeerDialog(false)
+      setPeerToBan(null)
+      queryClient.invalidateQueries({ queryKey: ["torrent-peers", instanceId, torrent?.hash] })
+    },
+    onError: (error) => {
+      toast.error(`Failed to ban peer: ${error.message}`)
+    },
+  })
+
+  // Handle copy peer IP:port
+  const handleCopyPeer = useCallback((peer: TorrentPeer) => {
+    const peerAddress = `${peer.ip}:${peer.port}`
+    navigator.clipboard.writeText(peerAddress).then(() => {
+      toast.success(`Copied ${peerAddress} to clipboard`)
+    }).catch(() => {
+      toast.error("Failed to copy to clipboard")
+    })
+  }, [])
+
+  // Handle ban peer click
+  const handleBanPeerClick = useCallback((peer: TorrentPeer) => {
+    setPeerToBan(peer)
+    setShowBanPeerDialog(true)
+  }, [])
+
+  // Handle ban peer confirmation
+  const handleBanPeerConfirm = useCallback(() => {
+    if (peerToBan) {
+      const peerAddress = `${peerToBan.ip}:${peerToBan.port}`
+      banPeerMutation.mutate(peerAddress)
+    }
+  }, [peerToBan, banPeerMutation])
+
+  // Handle add peers submit
+  const handleAddPeersSubmit = useCallback(() => {
+    const peers = peersToAdd.split(/[\n,]/).map(p => p.trim()).filter(p => p)
+    if (peers.length > 0) {
+      addPeersMutation.mutate(peers)
+    }
+  }, [peersToAdd, addPeersMutation])
 
   if (!torrent) return null
 
@@ -338,35 +414,67 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
                 ) : peersData && peersData.peers && typeof peersData.peers === "object" && Object.keys(peersData.peers).length > 0 ? (
-                  <div className="space-y-2">
-                    {Object.entries(peersData.peers).map(([peerKey, peer]) => (
-                      <div key={peerKey} className="border border-border/50 hover:border-border bg-card/50 hover:bg-card transition-all rounded-lg p-3 sm:p-4 space-y-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs sm:text-sm font-mono">{peer.ip}:{peer.port}</span>
-                            {peer.country_code && (
-                              <span
-                                className={`fi fi-${peer.country_code.toLowerCase()} rounded text-xs`}
-                                title={peer.country || peer.country_code}
-                              />
-                            )}
-                          </div>
-                          <span className="text-xs text-muted-foreground">{peer.client || "Unknown"}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                          <div>Progress: {Math.round((peer.progress || 0) * 100)}%</div>
-                          <div>Connection: {peer.connection || "N/A"}</div>
-                          <div>DL: {formatSpeed(peer.dl_speed || 0)}</div>
-                          <div>UL: {formatSpeed(peer.up_speed || 0)}</div>
-                          <div>Downloaded: {formatBytes(peer.downloaded || 0)}</div>
-                          <div>Uploaded: {formatBytes(peer.uploaded || 0)}</div>
-                        </div>
-                        {peer.flags && (
-                          <div className="text-xs text-muted-foreground">Flags: {peer.flags}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <div className="flex justify-end mb-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowAddPeersDialog(true)}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add Peers
+                      </Button>
+                    </div>
+                    <div className="space-y-2">
+                      {Object.entries(peersData.peers).map(([peerKey, peer]) => (
+                        <ContextMenu key={peerKey}>
+                          <ContextMenuTrigger>
+                            <div className="border border-border/50 hover:border-border bg-card/50 hover:bg-card transition-all rounded-lg p-3 sm:p-4 space-y-2 cursor-context-menu">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs sm:text-sm font-mono">{peer.ip}:{peer.port}</span>
+                                  {peer.country_code && (
+                                    <span
+                                      className={`fi fi-${peer.country_code.toLowerCase()} rounded text-xs`}
+                                      title={peer.country || peer.country_code}
+                                    />
+                                  )}
+                                </div>
+                                <span className="text-xs text-muted-foreground">{peer.client || "Unknown"}</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                                <div>Progress: {Math.round((peer.progress || 0) * 100)}%</div>
+                                <div>Connection: {peer.connection || "N/A"}</div>
+                                <div>DL: {formatSpeed(peer.dl_speed || 0)}</div>
+                                <div>UL: {formatSpeed(peer.up_speed || 0)}</div>
+                                <div>Downloaded: {formatBytes(peer.downloaded || 0)}</div>
+                                <div>Uploaded: {formatBytes(peer.uploaded || 0)}</div>
+                              </div>
+                              {peer.flags && (
+                                <div className="text-xs text-muted-foreground">Flags: {peer.flags}</div>
+                              )}
+                            </div>
+                          </ContextMenuTrigger>
+                          <ContextMenuContent>
+                            <ContextMenuItem
+                              onClick={() => handleCopyPeer(peer)}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy IP:port
+                            </ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              onClick={() => handleBanPeerClick(peer)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Ban className="h-4 w-4 mr-2" />
+                              Ban peer permanently
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <div className="text-sm text-muted-foreground text-center p-4">
                     No peers connected
@@ -415,6 +523,96 @@ export const TorrentDetailsPanel = memo(function TorrentDetailsPanel({ instanceI
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Add Peers Dialog */}
+      <Dialog open={showAddPeersDialog} onOpenChange={setShowAddPeersDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Peers</DialogTitle>
+            <DialogDescription>
+              Add one or more peers to this torrent. Enter each peer as IP:port, one per line or comma-separated.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="peers">Peers</Label>
+              <Textarea
+                id="peers"
+                className="min-h-[100px]"
+                placeholder={`192.168.1.100:51413
+10.0.0.5:6881
+tracker.example.com:8080
+[2001:db8::1]:6881`}
+                value={peersToAdd}
+                onChange={(e) => setPeersToAdd(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddPeersDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddPeersSubmit}
+              disabled={!peersToAdd.trim() || addPeersMutation.isPending}
+            >
+              {addPeersMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Add Peers
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Ban Peer Confirmation Dialog */}
+      <Dialog open={showBanPeerDialog} onOpenChange={setShowBanPeerDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ban Peer Permanently</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently ban this peer? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {peerToBan && (
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">IP Address:</span>
+                <span className="ml-2 font-mono">{peerToBan.ip}:{peerToBan.port}</span>
+              </div>
+              {peerToBan.client && (
+                <div>
+                  <span className="text-muted-foreground">Client:</span>
+                  <span className="ml-2">{peerToBan.client}</span>
+                </div>
+              )}
+              {peerToBan.country && (
+                <div>
+                  <span className="text-muted-foreground">Country:</span>
+                  <span className="ml-2">{peerToBan.country}</span>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBanPeerDialog(false)
+                setPeerToBan(null)
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleBanPeerConfirm}
+              disabled={banPeerMutation.isPending}
+            >
+              {banPeerMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Ban Peer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 });

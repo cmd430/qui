@@ -829,3 +829,74 @@ func (h *TorrentsHandler) GetTorrentFiles(w http.ResponseWriter, r *http.Request
 
 	RespondJSON(w, http.StatusOK, files)
 }
+
+// AddPeers adds peers to torrents
+func (h *TorrentsHandler) AddPeers(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Hashes []string `json:"hashes"`
+		Peers  []string `json:"peers"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.Hashes) == 0 || len(req.Peers) == 0 {
+		RespondError(w, http.StatusBadRequest, "Hashes and peers are required")
+		return
+	}
+
+	// Add peers
+	err = h.syncManager.AddPeersToTorrents(r.Context(), instanceID, req.Hashes, req.Peers)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to add peers to torrents")
+		RespondError(w, http.StatusInternalServerError, "Failed to add peers")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// BanPeers bans peers permanently
+func (h *TorrentsHandler) BanPeers(w http.ResponseWriter, r *http.Request) {
+	// Get instance ID from URL
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Peers []string `json:"peers"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.Peers) == 0 {
+		RespondError(w, http.StatusBadRequest, "Peers are required")
+		return
+	}
+
+	// Ban peers
+	err = h.syncManager.BanPeers(r.Context(), instanceID, req.Peers)
+	if err != nil {
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to ban peers")
+		RespondError(w, http.StatusInternalServerError, "Failed to ban peers")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
