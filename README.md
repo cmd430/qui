@@ -1,6 +1,6 @@
 # qui
 
-A fast, modern web interface for qBittorrent. Manage multiple qBittorrent instances from a single, lightweight application.
+A fast, modern web interface for qBittorrent. Supports managing multiple qBittorrent instances from a single, lightweight application.
 
 <div align="center">
   <img src=".github/assets/qui.png" alt="qui" width="100%" />
