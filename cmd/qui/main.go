@@ -27,6 +27,7 @@ import (
 	"github.com/autobrr/qui/internal/buildinfo"
 	"github.com/autobrr/qui/internal/config"
 	"github.com/autobrr/qui/internal/database"
+	"github.com/autobrr/qui/internal/domain"
 	"github.com/autobrr/qui/internal/metrics"
 	"github.com/autobrr/qui/internal/models"
 	"github.com/autobrr/qui/internal/polar"
@@ -477,6 +478,14 @@ func (app *Application) runServer() {
 
 	// Initialize managers
 	syncManager := qbittorrent.NewSyncManager(clientPool)
+
+	updateService := update.NewService(log.Logger, cfg.Config.CheckForUpdates, buildinfo.Version, buildinfo.UserAgent)
+	cfg.RegisterReloadListener(func(conf *domain.Config) {
+		updateService.SetEnabled(conf.CheckForUpdates)
+	})
+	updateCtx, cancelUpdate := context.WithCancel(context.Background())
+	defer cancelUpdate()
+	updateService.Start(updateCtx)
 
 	// Initialize client connections for all active instances on startup
 	go func() {
